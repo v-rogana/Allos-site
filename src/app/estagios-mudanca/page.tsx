@@ -5,7 +5,8 @@ import EstagiosContent from "@/components/estagios-mudanca/EstagiosContent";
 
 export const metadata = {
   title: "Estágios de Mudança | AvaliAllos",
-  description: "Compreender os estágios de mudança melhora a sensibilidade clínica e a efetividade do atendimento psicológico.",
+  description:
+    "Compreender os estágios de mudança melhora a sensibilidade clínica e a efetividade do atendimento psicológico.",
 };
 
 export default function Page() {
