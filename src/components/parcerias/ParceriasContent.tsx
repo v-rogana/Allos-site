@@ -1,6 +1,7 @@
 "use client";
 import { motion } from "framer-motion";
 import { useInView } from "react-intersection-observer";
+import basePath from "@/lib/basePath";
 
 const tiposParcerias = [
   {
@@ -82,7 +83,7 @@ function CtaParceria() {
             </svg>
             Enviar proposta
           </motion.a>
-          <motion.a href="/Allos-site/projetos"
+          <motion.a href={`${basePath}/projetos`}
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             className="inline-flex items-center gap-2 font-dm font-medium rounded-full transition-all"

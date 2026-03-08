@@ -1,6 +1,7 @@
 "use client";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
+import basePath from "@/lib/basePath";
 export default function LoadingScreen({ isLoading }: { isLoading: boolean }) {
   return (
     <AnimatePresence>
@@ -10,7 +11,7 @@ export default function LoadingScreen({ isLoading }: { isLoading: boolean }) {
           <motion.div initial={{ opacity:0,scale:.85 }} animate={{ opacity:1,scale:1 }} transition={{ duration:.6 }}
             className="flex flex-col items-center gap-5">
             <motion.div animate={{ scale: [1, 1.05, 1] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}>
-              <Image src="/Allos-site/Icone_Allos_Verde.png" alt="Allos" width={80} height={80} />
+              <Image src={`${basePath}/Icone_Allos_Verde.png`} alt="Allos" width={80} height={80} />
             </motion.div>
             <div className="text-center">
               <p className="font-fraunces font-bold text-2xl text-[#1A1A1A]">Allos</p>

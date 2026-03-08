@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence, useInView } from "framer-motion";
+import basePath from "@/lib/basePath";
 
 /* ── tokens ── */
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -677,7 +678,7 @@ function CompetenciasSection() {
               <p className="font-fraunces font-bold text-[#FDFBF7] text-lg">Conheça nossa formação contínua</p>
               <p className="font-dm text-sm mt-1" style={{ color: "rgba(253,251,247,0.4)" }}>Supervisão, grupos práticos e desenvolvimento clínico estruturado.</p>
             </div>
-            <motion.a href="/Allos-site/formacao"
+            <motion.a href={`${basePath}/formacao`}
               className="flex-shrink-0 inline-flex items-center gap-2 font-dm font-semibold text-sm text-white rounded-full"
               style={{ padding: "12px 28px", background: "#C84B31" }}
               whileHover={{ scale: 1.04, boxShadow: "0 6px 20px rgba(200,75,49,.3)" }}
@@ -693,7 +694,7 @@ function CompetenciasSection() {
             <div className="h-px w-8" style={{ background: "rgba(253,251,247,0.06)" }} />
             <p className="font-dm text-[12px]" style={{ color: "rgba(253,251,247,0.3)" }}>
               Quer entender a ciência por trás?{" "}
-              <a href="/Allos-site/pbe" className="transition-colors hover:text-[#C84B31]" style={{ color: "rgba(253,251,247,0.5)", textDecoration: "underline", textUnderlineOffset: "3px" }}>
+              <a href={`${basePath}/pbe`} className="transition-colors hover:text-[#C84B31]" style={{ color: "rgba(253,251,247,0.5)", textDecoration: "underline", textUnderlineOffset: "3px" }}>
                 Conheça a história da Prática Deliberada
               </a>
             </p>

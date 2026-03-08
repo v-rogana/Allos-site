@@ -2,6 +2,7 @@
 import { motion } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import Link from "next/link";
+import basePath from "@/lib/basePath";
 
 /* ── Bloco de texto com scroll reveal ── */
 function SectionBlock({ label, title, body, link, index = 0 }: {
@@ -138,7 +139,7 @@ function SobreCTA() {
         <p className="font-dm mb-8 max-w-[400px] mx-auto" style={{ fontSize: "15px", color: "rgba(253,251,247,0.45)" }}>
           Conheça nosso programa de formação clínica e entenda como transformamos talentos em legado.
         </p>
-        <motion.a href="/Allos-site/formacao"
+        <motion.a href={`${basePath}/formacao`}
           whileHover={{ scale: 1.04, boxShadow: "0 8px 28px rgba(200,75,49,.3)" }}
           whileTap={{ scale: 0.97 }}
           className="inline-flex items-center gap-2.5 font-dm font-semibold text-white bg-[#C84B31] rounded-full hover:bg-[#A33D27] transition-colors"

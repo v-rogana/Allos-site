@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { motion, useInView } from "framer-motion";
+import basePath from "@/lib/basePath";
 
 /* ── constants ─────────────────────────────────────────── */
 const GRAIN = `url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`;
@@ -748,7 +749,7 @@ export default function PbeContent() {
                 <p className="font-fraunces font-bold text-[#FDFBF7] text-lg">Conheça nossa formação contínua</p>
                 <p className="font-dm text-sm mt-1" style={{ color: "rgba(253,251,247,0.4)" }}>Supervisão, grupos práticos e desenvolvimento clínico estruturado.</p>
               </div>
-              <motion.a href="/Allos-site/formacao"
+              <motion.a href={`${basePath}/formacao`}
                 className="flex-shrink-0 inline-flex items-center gap-2 font-dm font-semibold text-sm text-white rounded-full"
                 style={{ padding: "12px 28px", background: "#C84B31" }}
                 whileHover={{ scale: 1.04, boxShadow: "0 6px 20px rgba(200,75,49,.3)" }}
@@ -788,7 +789,7 @@ export default function PbeContent() {
               A Allos está revolucionando a formação profissional ao combinar ciência, criatividade e engajamento — estabelecendo novos padrões de excelência no treinamento de terapeutas e difundindo mundialmente um modelo de aprendizagem que transforma a educação em saúde mental.
             </p>
             <motion.a
-              href="/Allos-site/sobre"
+              href={`${basePath}/sobre`}
               className="inline-flex items-center gap-3 font-dm font-semibold text-white bg-[#C84B31] rounded-full"
               style={{ padding: "17px 52px", fontSize: "15px" }}
               whileHover={{ scale: 1.05 }}

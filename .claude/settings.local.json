@@ -4,7 +4,8 @@
       "Bash(dir C:\\\\Users\\\\Usuario\\\\Documents\\\\laboratorio-ensino\\\\Allos-site:*)",
       "Bash(npm run:*)",
       "Bash(npx next:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(GITHUB_ACTIONS=true npm run:*)"
     ]
   }
 }

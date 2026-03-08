@@ -4,6 +4,7 @@ import HeroFaq from "@/components/faq/HeroFaq";
 import FaqAccordion from "@/components/faq/FaqAccordion";
 import FaqCTA from "@/components/faq/FaqCTA";
 import type { FaqGroup } from "@/components/faq/FaqAccordion";
+import basePath from "@/lib/basePath";
 
 const faqData: FaqGroup[] = [
   {
@@ -42,7 +43,7 @@ const faqData: FaqGroup[] = [
         a: (
           <>
             O processo seletivo para est\u00e1gio em psicologia cl\u00ednica est\u00e1 detalhado em:{" "}
-            <a href="/Allos-site/processo-seletivo" className="text-[#C84B31] font-semibold hover:underline">
+            <a href={`${basePath}/processo-seletivo`} className="text-[#C84B31] font-semibold hover:underline">
               Processo Seletivo Allos
             </a>
           </>
