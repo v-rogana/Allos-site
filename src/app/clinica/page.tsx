@@ -14,7 +14,6 @@ export default function ClinicaPage() {
       <NavBar />
       <main id="main-content">
         <DarkHero
-          badge="Clínica Escola"
           titleLine1="Clínica da"
           titleLine2="Associação Allos"
           titleLine2Italic={true}

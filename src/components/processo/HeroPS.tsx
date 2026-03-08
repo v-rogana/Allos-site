@@ -19,11 +19,6 @@ export default function HeroPS() {
       </div>
       <div className="relative z-10 max-w-[1200px] mx-auto px-6 md:px-10 py-36 w-full">
         <div className="max-w-[680px]">
-          <motion.div {...up(.1)} className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-10"
-            style={{background:"#F5F0E8",border:"1px solid #E5DFD3"}}>
-            <span className="text-[#C84B31] text-xs">◆</span>
-            <span className="font-dm text-[13px] font-medium text-[#5C5C5C]">Processo Seletivo · Allos</span>
-          </motion.div>
           <motion.h1 {...up(.2)} className="font-fraunces font-bold text-[#1A1A1A] leading-[.95] mb-8"
             style={{fontSize:"clamp(40px,7vw,80px)"}}>
             Processo Seletivo<br/>Para <span className="italic text-[#C84B31]">Atuar</span> em Nossa<br/>Clínica Escola

@@ -14,7 +14,6 @@ export default function ParceriasPage() {
       <NavBar />
       <main id="main-content">
         <DarkHero
-          badge="Parcerias institucionais"
           titleLine1="Projetos construídos"
           titleLine2="em rede"
           titleLine2Italic={true}

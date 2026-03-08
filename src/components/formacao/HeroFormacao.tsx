@@ -125,17 +125,6 @@ export default function HeroFormacao() {
       />
 
       <div className="relative z-10 w-full max-w-[1200px] mx-auto px-6 md:px-10 py-40">
-        {/* Badge */}
-        <motion.div {...up(0.1)} className="mb-10">
-          <div
-            className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full font-dm text-[12px] font-medium"
-            style={{ background: "rgba(200,75,49,0.1)", border: "1px solid rgba(200,75,49,0.25)", color: "rgba(253,251,247,0.7)" }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-[#C84B31] animate-pulse" />
-            Associação Allos · Formação Clínica
-          </div>
-        </motion.div>
-
         {/* Título */}
         <div className="mb-8" style={{ fontSize: "clamp(56px,10vw,112px)", lineHeight: 0.95 }}>
           <WordReveal words={words1} delay={0.25} />

@@ -56,21 +56,6 @@ export default function HeroFaq() {
       </motion.div>
 
       <div className="relative z-10 max-w-[1200px] mx-auto">
-        {/* Badge */}
-        <motion.div {...up(0.1)} className="mb-8">
-          <div
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full font-dm text-[12px] font-medium"
-            style={{
-              background: "rgba(253,251,247,0.05)",
-              border: "1px solid rgba(253,251,247,0.1)",
-              color: "rgba(253,251,247,0.6)",
-            }}
-          >
-            <span className="text-[#C84B31] text-xs">◆</span>
-            Dúvidas sobre a Allos
-          </div>
-        </motion.div>
-
         {/* Título */}
         <div className="overflow-hidden mb-2">
           <motion.h1

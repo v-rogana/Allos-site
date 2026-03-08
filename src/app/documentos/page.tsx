@@ -14,7 +14,6 @@ export default function DocumentosPage() {
       <NavBar />
       <main id="main-content">
         <DarkHero
-          badge="Associação Allos"
           titleLine1="Documentos"
           titleLine2="Institucionais"
           titleLine2Italic={true}

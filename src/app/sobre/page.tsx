@@ -14,7 +14,6 @@ export default function SobrePage() {
       <NavBar />
       <main id="main-content">
         <DarkHero
-          badge="Quem somos"
           titleLine1="Associação"
           titleLine2="Allos"
           titleLine2Italic={true}

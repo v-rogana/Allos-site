@@ -14,7 +14,6 @@ export default function Page() {
       <NavBar />
       <main id="main-content">
         <DarkHero
-          badge="Estrutura Clínica"
           titleLine1="Coerência e"
           titleLine2="Consistência"
           titleLine2Italic={true}

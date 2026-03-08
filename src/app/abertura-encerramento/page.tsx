@@ -10,7 +10,6 @@ export default function AberturaEncerramentoPage() {
     <main className="bg-[#1A1A1A] min-h-screen">
       <NavBar />
       <DarkHero
-        badge="Competência · Estrutura"
         titleLine1="Abertura"
         titleLine2="& Encerramento"
         titleLine2Italic={true}

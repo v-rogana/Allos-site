@@ -10,7 +10,6 @@ export default function PbePage() {
     <main className="bg-[#1A1A1A] min-h-screen">
       <NavBar />
       <DarkHero
-        badge="Formação Clínica"
         titleLine1="Psicologia Baseada em Evidências"
         titleLine2="& Prática Deliberada"
         titleLine2Italic={true}

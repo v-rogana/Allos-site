@@ -12,6 +12,10 @@ const config: Config = {
         "accent-dark": "#A33D27",
         sage: "#2D6A4F",
         border: "#E5DFD3",
+        teal: "#2E9E8F",
+        "teal-dark": "#1A7A6D",
+        "teal-light": "#3ECFBE",
+        "teal-bg": "#0D3B36",
       },
       fontFamily: {
         fraunces: ["var(--font-fraunces)", "serif"],

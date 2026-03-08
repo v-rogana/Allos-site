@@ -28,7 +28,7 @@ function WordReveal({
         >
           <motion.span
             className={`block font-fraunces font-bold ${italic ? "italic" : ""}`}
-            style={{ color: italic ? "#0EA5A0" : "#1A1A1A" }}
+            style={{ color: italic ? "#2E9E8F" : "#1A1A1A" }}
             initial={
               r
                 ? { opacity: 0 }
@@ -66,9 +66,9 @@ export default function HeroSection() {
       className="relative min-h-[100dvh] flex flex-col items-center justify-center overflow-hidden"
       style={{
         background: `
-          radial-gradient(ellipse at 15% 75%, rgba(14,165,160,.08) 0%, transparent 50%),
-          radial-gradient(ellipse at 85% 15%, rgba(14,165,160,.05) 0%, transparent 45%),
-          radial-gradient(ellipse at 50% 50%, rgba(200,75,49,.03) 0%, transparent 60%),
+          radial-gradient(ellipse at 15% 75%, rgba(46,158,143,.08) 0%, transparent 50%),
+          radial-gradient(ellipse at 85% 15%, rgba(46,158,143,.05) 0%, transparent 45%),
+          radial-gradient(ellipse at 50% 50%, rgba(46,158,143,.03) 0%, transparent 60%),
           #FDFBF7
         `,
       }}
@@ -80,7 +80,7 @@ export default function HeroSection() {
         className="absolute left-0 top-[15%] w-[3px] h-[200px] hidden lg:block"
         style={{
           background:
-            "linear-gradient(to bottom, transparent, #0EA5A0, transparent)",
+            "linear-gradient(to bottom, transparent, #2E9E8F, transparent)",
           opacity: 0.15,
         }}
       />
@@ -89,37 +89,16 @@ export default function HeroSection() {
         className="absolute right-0 bottom-[20%] w-[3px] h-[160px] hidden lg:block"
         style={{
           background:
-            "linear-gradient(to bottom, transparent, #0EA5A0, transparent)",
+            "linear-gradient(to bottom, transparent, #2E9E8F, transparent)",
           opacity: 0.1,
         }}
       />
 
       <div className="relative z-10 flex flex-col items-center text-center px-4 sm:px-6 max-w-4xl mx-auto">
-        {/* Badge */}
-        <motion.div {...up(0.1)} className="mb-6 sm:mb-8">
-          <div
-            className="inline-flex items-center gap-2 sm:gap-2.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-full font-dm text-[12px] sm:text-[13px] font-medium"
-            style={{
-              background: "rgba(14,165,160,.08)",
-              border: "1px solid rgba(14,165,160,.18)",
-              color: "#0C6E6A",
-            }}
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full"
-              style={{
-                background: "#0EA5A0",
-                boxShadow: "0 0 6px rgba(14,165,160,.5)",
-              }}
-            />
-            Transformando talentos em legado
-          </div>
-        </motion.div>
-
         {/* Title */}
         <div
           className="mb-5 sm:mb-6 leading-none"
-          style={{ fontSize: "clamp(32px,8vw,88px)" }}
+          style={{ fontSize: "clamp(2.8rem, 7vw, 5.5rem)" }}
         >
           <WordReveal words={["TRANSFORMANDO", "TALENTOS"]} delay={0.3} />
           <WordReveal words={["EM", "LEGADO"]} italic delay={0.52} />
@@ -138,15 +117,15 @@ export default function HeroSection() {
 
         {/* CTAs */}
         <motion.div {...up(1.05)} className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center w-full sm:w-auto px-2 sm:px-0">
-          {/* Primary CTA — terracotta (conversion) */}
+          {/* Primary CTA — teal */}
           <motion.a
             href="https://bit.ly/terapiasite" target="_blank" rel="noopener noreferrer"
             whileHover={{
               scale: 1.04,
-              boxShadow: "0 8px 28px rgba(200,75,49,.3)",
+              boxShadow: "0 8px 28px rgba(46,158,143,.3)",
             }}
             whileTap={{ scale: 0.97 }}
-            className="font-dm font-semibold text-white bg-[#C84B31] px-8 py-3.5 rounded-full hover:bg-[#A33D27] transition-colors text-center"
+            className="font-dm font-semibold text-white bg-[#2E9E8F] px-8 py-3.5 rounded-full hover:bg-[#1A7A6D] transition-colors text-center"
           >
             Agendar sessão →
           </motion.a>
@@ -157,13 +136,13 @@ export default function HeroSection() {
             whileTap={{ scale: 0.97 }}
             className="font-dm font-medium px-8 py-3.5 rounded-full transition-all text-center"
             style={{
-              color: "#0C6E6A",
-              border: "1px solid rgba(14,165,160,.35)",
+              color: "#1A7A6D",
+              border: "1px solid rgba(46,158,143,.35)",
               background: "transparent",
             }}
             onMouseEnter={(e) => {
               (e.target as HTMLElement).style.background =
-                "rgba(14,165,160,.06)";
+                "rgba(46,158,143,.06)";
             }}
             onMouseLeave={(e) => {
               (e.target as HTMLElement).style.background = "transparent";
@@ -191,7 +170,7 @@ export default function HeroSection() {
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
             <path
               d="M3 6L8 11L13 6"
-              stroke="#0EA5A0"
+              stroke="#2E9E8F"
               strokeWidth="1.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -205,7 +184,7 @@ export default function HeroSection() {
         className="absolute bottom-0 left-0 right-0 h-px z-10"
         style={{
           background:
-            "linear-gradient(to right, transparent, rgba(14,165,160,.2) 30%, rgba(14,165,160,.2) 70%, transparent)",
+            "linear-gradient(to right, transparent, rgba(46,158,143,.2) 30%, rgba(46,158,143,.2) 70%, transparent)",
         }}
       />
     </section>

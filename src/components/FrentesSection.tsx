@@ -113,7 +113,7 @@ function Card({ c, index }: { c: (typeof cards)[0]; index: number }) {
       <div
         className="absolute top-0 left-0 right-0 h-[2px] origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-600"
         style={{
-          background: "linear-gradient(to right, #0EA5A0, #C84B31, transparent)",
+          background: "linear-gradient(to right, #2E9E8F, #2E9E8F, transparent)",
         }}
       />
 
@@ -125,7 +125,7 @@ function Card({ c, index }: { c: (typeof cards)[0]; index: number }) {
             style={{
               background: "rgba(14,165,160,.07)",
               border: "1px solid rgba(14,165,160,.12)",
-              color: "#0EA5A0",
+              color: "#2E9E8F",
             }}
             whileHover={{
               background: "rgba(14,165,160,.12)",
@@ -136,7 +136,7 @@ function Card({ c, index }: { c: (typeof cards)[0]; index: number }) {
           </motion.div>
           <p
             className="font-dm font-semibold text-[11px] tracking-[.24em] uppercase"
-            style={{ color: "#0EA5A0" }}
+            style={{ color: "#2E9E8F" }}
           >
             {c.label}
           </p>
@@ -160,13 +160,13 @@ function Card({ c, index }: { c: (typeof cards)[0]; index: number }) {
                 key={b.t}
                 whileHover={{
                   scale: 1.03,
-                  boxShadow: "0 4px 18px rgba(200,75,49,.3)",
+                  boxShadow: "0 4px 18px rgba(46,158,143,.3)",
                 }}
                 whileTap={{ scale: 0.97 }}
               >
                 <Link
                   href={b.href}
-                  className="inline-flex items-center gap-2 font-dm font-semibold text-[13px] text-white px-5 py-2.5 rounded-full transition-colors bg-[#C84B31] hover:bg-[#A33D27]"
+                  className="inline-flex items-center gap-2 font-dm font-semibold text-[13px] text-white px-5 py-2.5 rounded-full transition-colors bg-[#2E9E8F] hover:bg-[#1A7A6D]"
                 >
                   {b.t}
                   <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
@@ -182,7 +182,7 @@ function Card({ c, index }: { c: (typeof cards)[0]; index: number }) {
               >
                 <Link
                   href={b.href}
-                  className="inline-flex font-dm font-medium text-[13px] px-5 py-2.5 rounded-full transition-all text-[#C84B31] border border-[rgba(200,75,49,.3)] hover:bg-[rgba(200,75,49,.05)]"
+                  className="inline-flex font-dm font-medium text-[13px] px-5 py-2.5 rounded-full transition-all text-[#2E9E8F] border border-[rgba(46,158,143,.3)] hover:bg-[rgba(46,158,143,.05)]"
                 >
                   {b.t}
                 </Link>
@@ -221,7 +221,7 @@ export default function FrentesSection() {
         className="absolute -bottom-20 -left-20 w-[600px] h-[500px] pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse at center, rgba(200,75,49,.12) 0%, transparent 55%)",
+            "radial-gradient(ellipse at center, rgba(46,158,143,.12) 0%, transparent 55%)",
         }}
       />
 
@@ -275,31 +275,6 @@ export default function FrentesSection() {
       <div className="max-w-[1200px] mx-auto relative z-10">
         {/* Header */}
         <div ref={ref} className="mb-16 text-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={inView ? { opacity: 1, scale: 1 } : {}}
-            transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2.5 px-5 py-2 rounded-full mb-6"
-            style={{
-              background: "rgba(27,186,176,.08)",
-              border: "1px solid rgba(27,186,176,.15)",
-            }}
-          >
-            <span
-              className="w-1.5 h-1.5 rounded-full"
-              style={{
-                background: "#1BBAB0",
-                boxShadow: "0 0 8px rgba(27,186,176,.6)",
-              }}
-            />
-            <span
-              className="font-dm font-semibold text-[11px] tracking-[.2em] uppercase"
-              style={{ color: "#1BBAB0" }}
-            >
-              Nossas Frentes
-            </span>
-          </motion.div>
-
           <motion.h2
             initial={{ opacity: 0, y: 20 }}
             animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -313,7 +288,7 @@ export default function FrentesSection() {
           >
             Uma organização,
             <br className="hidden sm:block" />{" "}
-            <span className="italic" style={{ color: "#C84B31" }}>
+            <span className="italic" style={{ color: "#2E9E8F" }}>
               múltiplos impactos
             </span>
           </motion.h2>

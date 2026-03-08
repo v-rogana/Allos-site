@@ -27,7 +27,7 @@ export default function CTASection() {
             className="absolute inset-0 pointer-events-none"
             style={{
               background:
-                "radial-gradient(ellipse 70% 60% at 50% 110%, rgba(200,75,49,.15) 0%, transparent 60%)",
+                "radial-gradient(ellipse 70% 60% at 50% 110%, rgba(46,158,143,.15) 0%, transparent 60%)",
             }}
           />
 
@@ -73,29 +73,6 @@ export default function CTASection() {
           </p>
 
           <div className="relative z-10">
-            {/* Badge */}
-            <motion.p
-              initial={{ opacity: 0, y: 10 }}
-              animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ delay: 0.05, duration: 0.5 }}
-              className="font-dm font-semibold text-[11px] tracking-[.28em] uppercase mb-5"
-              style={{ color: "rgba(255,255,255,.6)" }}
-            >
-              Projetos
-            </motion.p>
-
-            {/* Ornament */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={inView ? { opacity: 1 } : {}}
-              transition={{ delay: 0.08, duration: 0.5 }}
-              className="flex items-center justify-center gap-3 mb-6"
-            >
-              <div className="h-px w-10" style={{ background: "linear-gradient(to right, transparent, rgba(255,255,255,.25))" }} />
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: "rgba(255,255,255,.3)" }} />
-              <div className="h-px w-10" style={{ background: "linear-gradient(to right, rgba(255,255,255,.25), transparent)" }} />
-            </motion.div>
-
             {/* Title */}
             <motion.h2
               initial={{ opacity: 0, y: 18 }}
@@ -139,10 +116,10 @@ export default function CTASection() {
                 href="/projetos"
                 whileHover={{
                   scale: 1.04,
-                  boxShadow: "0 10px 36px rgba(200,75,49,.4)",
+                  boxShadow: "0 10px 36px rgba(46,158,143,.4)",
                 }}
                 whileTap={{ scale: 0.97 }}
-                className="inline-flex items-center gap-2.5 font-dm font-semibold text-white bg-[#C84B31] rounded-full hover:bg-[#A33D27] transition-colors"
+                className="inline-flex items-center gap-2.5 font-dm font-semibold text-white bg-[#2E9E8F] rounded-full hover:bg-[#1A7A6D] transition-colors"
                 style={{ padding: "15px 44px", fontSize: "15px" }}
               >
                 Ver projetos
