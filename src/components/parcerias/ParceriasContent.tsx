@@ -82,7 +82,7 @@ function CtaParceria() {
             </svg>
             Enviar proposta
           </motion.a>
-          <motion.a href="/projetos"
+          <motion.a href="/Allos-site/projetos"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             className="inline-flex items-center gap-2 font-dm font-medium rounded-full transition-all"

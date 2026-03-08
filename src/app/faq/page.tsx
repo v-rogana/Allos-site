@@ -42,7 +42,7 @@ const faqData: FaqGroup[] = [
         a: (
           <>
             O processo seletivo para est\u00e1gio em psicologia cl\u00ednica est\u00e1 detalhado em:{" "}
-            <a href="/processo-seletivo" className="text-[#C84B31] font-semibold hover:underline">
+            <a href="/Allos-site/processo-seletivo" className="text-[#C84B31] font-semibold hover:underline">
               Processo Seletivo Allos
             </a>
           </>

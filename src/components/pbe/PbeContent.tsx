@@ -748,7 +748,7 @@ export default function PbeContent() {
                 <p className="font-fraunces font-bold text-[#FDFBF7] text-lg">Conheça nossa formação contínua</p>
                 <p className="font-dm text-sm mt-1" style={{ color: "rgba(253,251,247,0.4)" }}>Supervisão, grupos práticos e desenvolvimento clínico estruturado.</p>
               </div>
-              <motion.a href="/formacao"
+              <motion.a href="/Allos-site/formacao"
                 className="flex-shrink-0 inline-flex items-center gap-2 font-dm font-semibold text-sm text-white rounded-full"
                 style={{ padding: "12px 28px", background: "#C84B31" }}
                 whileHover={{ scale: 1.04, boxShadow: "0 6px 20px rgba(200,75,49,.3)" }}
@@ -788,7 +788,7 @@ export default function PbeContent() {
               A Allos está revolucionando a formação profissional ao combinar ciência, criatividade e engajamento — estabelecendo novos padrões de excelência no treinamento de terapeutas e difundindo mundialmente um modelo de aprendizagem que transforma a educação em saúde mental.
             </p>
             <motion.a
-              href="/sobre"
+              href="/Allos-site/sobre"
               className="inline-flex items-center gap-3 font-dm font-semibold text-white bg-[#C84B31] rounded-full"
               style={{ padding: "17px 52px", fontSize: "15px" }}
               whileHover={{ scale: 1.05 }}

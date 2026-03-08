@@ -113,7 +113,7 @@ export default function CTASection() {
               transition={{ delay: 0.3, duration: 0.5 }}
             >
               <motion.a
-                href="/projetos"
+                href="/Allos-site/projetos"
                 whileHover={{
                   scale: 1.04,
                   boxShadow: "0 10px 36px rgba(46,158,143,.4)",

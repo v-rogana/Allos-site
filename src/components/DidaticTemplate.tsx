@@ -411,7 +411,7 @@ function CompGrid({ activeComp, accent }: { activeComp: string; accent: string }
               <p className="font-fraunces font-bold text-[#FDFBF7] text-lg">Conheça nossa formação contínua</p>
               <p className="font-dm text-sm mt-1" style={{ color: "rgba(253,251,247,0.4)" }}>Supervisão, grupos práticos e desenvolvimento clínico estruturado.</p>
             </div>
-            <motion.a href="/formacao"
+            <motion.a href="/Allos-site/formacao"
               className="flex-shrink-0 inline-flex items-center gap-2 font-dm font-semibold text-sm text-white rounded-full transition-colors"
               style={{ padding: "12px 28px", background: "#C84B31" }}
               whileHover={{ scale: 1.04, boxShadow: "0 6px 20px rgba(200,75,49,.3)" }}
@@ -428,7 +428,7 @@ function CompGrid({ activeComp, accent }: { activeComp: string; accent: string }
             <div className="h-px w-8" style={{ background: "rgba(253,251,247,0.06)" }} />
             <p className="font-dm text-[12px]" style={{ color: "rgba(253,251,247,0.3)" }}>
               Quer entender a ciência por trás?{" "}
-              <a href="/pbe" className="transition-colors hover:text-[#C84B31]" style={{ color: "rgba(253,251,247,0.5)", textDecoration: "underline", textUnderlineOffset: "3px" }}>
+              <a href="/Allos-site/pbe" className="transition-colors hover:text-[#C84B31]" style={{ color: "rgba(253,251,247,0.5)", textDecoration: "underline", textUnderlineOffset: "3px" }}>
                 Conheça a história da Prática Deliberada
               </a>
             </p>

@@ -131,7 +131,7 @@ export default function HeroSection() {
           </motion.a>
           {/* Secondary CTA — teal (navigation) */}
           <motion.a
-            href="/sobre"
+            href="/Allos-site/sobre"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             className="font-dm font-medium px-8 py-3.5 rounded-full transition-all text-center"
