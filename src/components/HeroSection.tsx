@@ -99,7 +99,7 @@ export default function HeroSection() {
         {/* Title */}
         <div
           className="mb-5 sm:mb-6 leading-none"
-          style={{ fontSize: "clamp(2.8rem, 7vw, 5.5rem)" }}
+          style={{ fontSize: "clamp(2.2rem, 7vw, 5.5rem)" }}
         >
           <WordReveal words={["TRANSFORMANDO", "TALENTOS"]} delay={0.3} />
           <WordReveal words={["EM", "LEGADO"]} italic delay={0.52} />
