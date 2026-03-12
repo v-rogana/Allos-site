@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import LoginCertificados from '@/components/certificado/LoginCertificados'
 import AdminCertificados from '@/components/certificado/AdminCertificados'
 
-export default function CertificadoAdminPage() {
+export default function AdminFormacaoPage() {
   const [auth, setAuth] = useState(false)
   const [checking, setChecking] = useState(true)
 

@@ -1,4 +1,7 @@
-# Setup do Sistema de Certificados e Feedback
+# Setup do Sistema de Certificados, Feedback e Formação
+
+**Painel admin:** `/admin-formacao`
+**Formulário público:** `/certificado`
 
 ## Tabelas no Supabase
 
@@ -55,12 +58,12 @@ ALTER TABLE certificado_atividades ENABLE ROW LEVEL SECURITY;
 ALTER TABLE certificado_condutores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE certificado_submissions ENABLE ROW LEVEL SECURITY;
 
--- Permitir leitura pública de atividades e condutores ativos
-CREATE POLICY "Leitura pública de atividades" ON certificado_atividades
-  FOR SELECT USING (true);
+-- Permitir todas as operações em atividades e condutores (gerenciadas pelo admin)
+CREATE POLICY "Acesso total atividades" ON certificado_atividades
+  FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Leitura pública de condutores" ON certificado_condutores
-  FOR SELECT USING (true);
+CREATE POLICY "Acesso total condutores" ON certificado_condutores
+  FOR ALL USING (true) WITH CHECK (true);
 
 -- Permitir inserção pública de submissions
 CREATE POLICY "Inserção pública de submissions" ON certificado_submissions

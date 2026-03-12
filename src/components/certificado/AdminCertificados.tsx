@@ -3,11 +3,15 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  BarChart3, Users, FileText, Settings, Star, TrendingUp,
-  Plus, Trash2, Eye, EyeOff, ChevronDown, ChevronRight,
-  Award, MessageSquare, Search
+  BarChart3, Users, FileText, Star, TrendingUp,
+  Plus, Trash2, Eye, EyeOff, ChevronRight,
+  Award, MessageSquare, Search, Download, CheckSquare, Square,
+  X, AlertTriangle, RefreshCw, Filter, Check, Edit3, Phone, ChevronDown
 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import CertificateGenerator from './CertificateGenerator'
+import FormacaoBase from './FormacaoBase'
+
+// ─── Types ─────────────────────────────────────────────────────────
 
 interface Submission {
   id: string
@@ -26,255 +30,400 @@ interface Atividade {
   id: string
   nome: string
   ativo: boolean
-  created_at: string
 }
 
 interface Condutor {
   id: string
   nome: string
   ativo: boolean
-  created_at: string
+  telefone: string | null
+  observacoes: string | null
 }
 
-type Tab = 'dashboard' | 'condutores-view' | 'atividades' | 'condutores' | 'submissions'
-type TimeFilter = 'day' | 'month' | 'quarter' | 'semester' | 'year' | 'all'
+type Tab = 'dashboard' | 'condutores' | 'atividades' | 'envios' | 'formacao'
+type TimeFilter = 'month' | 'quarter' | 'semester' | 'year' | 'all'
 
 const TAB_LABELS: Record<Tab, string> = {
-  'dashboard': 'Dashboard',
-  'condutores-view': 'Condutores',
-  'atividades': 'Atividades',
-  'condutores': 'Gestão Condutores',
-  'submissions': 'Envios',
+  dashboard: 'Dashboard',
+  condutores: 'Condutores',
+  atividades: 'Atividades',
+  envios: 'Envios',
+  formacao: 'Formação',
 }
 
 const TIME_LABELS: Record<TimeFilter, string> = {
-  'day': 'Hoje',
-  'month': 'Este Mês',
-  'quarter': 'Trimestre',
-  'semester': 'Semestre',
-  'year': 'Ano',
-  'all': 'Todos',
+  month: 'Este Mês',
+  quarter: 'Trimestre',
+  semester: 'Semestre',
+  year: 'Ano',
+  all: 'Todos',
 }
 
 function getFilterDate(filter: TimeFilter): Date | null {
   const now = new Date()
   switch (filter) {
-    case 'day': return new Date(now.getFullYear(), now.getMonth(), now.getDate())
     case 'month': return new Date(now.getFullYear(), now.getMonth(), 1)
-    case 'quarter': {
-      const q = Math.floor(now.getMonth() / 3) * 3
-      return new Date(now.getFullYear(), q, 1)
-    }
-    case 'semester': {
-      const s = now.getMonth() < 6 ? 0 : 6
-      return new Date(now.getFullYear(), s, 1)
-    }
+    case 'quarter': return new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
+    case 'semester': return new Date(now.getFullYear(), now.getMonth() < 6 ? 0 : 6, 1)
     case 'year': return new Date(now.getFullYear(), 0, 1)
     case 'all': return null
   }
 }
 
+const WA_ICON = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="#25D366">
+    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+  </svg>
+)
+
+// ─── Main Component ────────────────────────────────────────────────
+
 export default function AdminCertificados() {
   const [tab, setTab] = useState<Tab>('dashboard')
   const [submissions, setSubmissions] = useState<Submission[]>([])
   const [atividades, setAtividades] = useState<Atividade[]>([])
-  const [condutoresList, setCondutoresList] = useState<Condutor[]>([])
+  const [condutores, setCondutores] = useState<Condutor[]>([])
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('month')
   const [loading, setLoading] = useState(true)
-  const [selectedCondutor, setSelectedCondutor] = useState<string | null>(null)
-  const [newAtividade, setNewAtividade] = useState('')
-  const [newCondutor, setNewCondutor] = useState('')
+
+  // Envios state
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [filterAtividade, setFilterAtividade] = useState('all')
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
+  const [certificatePreview, setCertificatePreview] = useState<Submission | null>(null)
+
+  // Condutores state
+  const [editingCondutor, setEditingCondutor] = useState<Condutor | null>(null)
+  const [newCondutorNome, setNewCondutorNome] = useState('')
+  const [selectedCondutor, setSelectedCondutor] = useState<string | null>(null)
+
+  // Atividades state
+  const [newAtividade, setNewAtividade] = useState('')
+
+  // UI state
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [toast, setToast] = useState('')
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(''), 3000)
+  }, [])
+
+  const adminApi = useCallback(async (body: Record<string, unknown>) => {
+    const res = await fetch('/api/certificados/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    return res.json()
+  }, [])
 
   const loadData = useCallback(async () => {
     setLoading(true)
     const [subRes, atRes, coRes] = await Promise.all([
-      supabase.from('certificado_submissions').select('*').order('created_at', { ascending: false }),
-      supabase.from('certificado_atividades').select('*').order('nome'),
-      supabase.from('certificado_condutores').select('*').order('nome'),
+      fetch('/api/certificados/admin?type=submissions').then(r => r.json()),
+      fetch('/api/certificados/admin?type=atividades').then(r => r.json()),
+      fetch('/api/certificados/admin?type=condutores').then(r => r.json()),
     ])
-    if (subRes.data) setSubmissions(subRes.data)
-    if (atRes.data) setAtividades(atRes.data)
-    if (coRes.data) setCondutoresList(coRes.data)
+    if (Array.isArray(subRes)) setSubmissions(subRes)
+    if (Array.isArray(atRes)) setAtividades(atRes)
+    if (Array.isArray(coRes)) setCondutores(coRes)
     setLoading(false)
   }, [])
 
   useEffect(() => { loadData() }, [loadData])
 
+  // ─── Filtered data ─────────────────────────────────────────────
   const filteredSubmissions = useMemo(() => {
-    const filterDate = getFilterDate(timeFilter)
-    if (!filterDate) return submissions
-    return submissions.filter(s => new Date(s.created_at) >= filterDate)
+    const d = getFilterDate(timeFilter)
+    if (!d) return submissions
+    return submissions.filter(s => new Date(s.created_at) >= d)
   }, [submissions, timeFilter])
 
-  // ─── Dashboard Metrics ───────────────────────────────────────────
-  const metrics = useMemo(() => {
-    const subs = filteredSubmissions
-    const totalSubmissions = subs.length
-    const avgGroupRating = subs.length > 0
-      ? subs.reduce((sum, s) => sum + s.nota_grupo, 0) / subs.length
-      : 0
-    const avgConductorRating = subs.length > 0
-      ? subs.reduce((sum, s) => sum + s.nota_condutor, 0) / subs.length
-      : 0
-    const totalFeedbacks = subs.filter(s => s.relato).length
-
-    // Per conductor metrics
-    const conductorMap = new Map<string, { ratings: number[]; count: number }>()
-    subs.forEach(s => {
-      s.condutores?.forEach(c => {
-        const existing = conductorMap.get(c) || { ratings: [], count: 0 }
-        existing.ratings.push(s.nota_condutor)
-        existing.count++
-        conductorMap.set(c, existing)
-      })
-    })
-
-    const conductorMetrics = Array.from(conductorMap.entries())
-      .map(([name, data]) => ({
-        name,
-        avgRating: data.ratings.reduce((a, b) => a + b, 0) / data.ratings.length,
-        count: data.count,
-      }))
-      .sort((a, b) => b.avgRating - a.avgRating)
-
-    // Activity distribution
-    const activityMap = new Map<string, number>()
-    subs.forEach(s => activityMap.set(s.atividade_nome, (activityMap.get(s.atividade_nome) || 0) + 1))
-    const activityDist = Array.from(activityMap.entries())
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-
-    // Daily submissions (last 30 days)
-    const dailyMap = new Map<string, number>()
-    subs.forEach(s => {
-      const day = s.created_at.split('T')[0]
-      dailyMap.set(day, (dailyMap.get(day) || 0) + 1)
-    })
-    const dailyData = Array.from(dailyMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-30)
-
-    return {
-      totalSubmissions,
-      avgGroupRating,
-      avgConductorRating,
-      totalFeedbacks,
-      conductorMetrics,
-      activityDist,
-      dailyData,
+  const visibleSubmissions = useMemo(() => {
+    let list = submissions
+    if (searchTerm) {
+      const t = searchTerm.toLowerCase()
+      list = list.filter(s => s.nome_completo.toLowerCase().includes(t) || s.email.toLowerCase().includes(t))
     }
+    if (filterAtividade !== 'all') list = list.filter(s => s.atividade_nome === filterAtividade)
+    if (filterDateFrom) list = list.filter(s => s.created_at.split('T')[0] >= filterDateFrom)
+    if (filterDateTo) list = list.filter(s => s.created_at.split('T')[0] <= filterDateTo)
+    return list
+  }, [submissions, searchTerm, filterAtividade, filterDateFrom, filterDateTo])
+
+  // ─── Dashboard metrics ─────────────────────────────────────────
+  const metrics = useMemo(() => {
+    const s = filteredSubmissions
+    const total = s.length
+    const avgGroup = total > 0 ? s.reduce((a, x) => a + x.nota_grupo, 0) / total : 0
+    const avgCond = total > 0 ? s.reduce((a, x) => a + x.nota_condutor, 0) / total : 0
+    const relatos = s.filter(x => x.relato).length
+
+    const cMap = new Map<string, { ratings: number[]; count: number }>()
+    s.forEach(x => x.condutores?.forEach(c => {
+      const e = cMap.get(c) || { ratings: [], count: 0 }
+      e.ratings.push(x.nota_condutor); e.count++
+      cMap.set(c, e)
+    }))
+    const conductorRanking = Array.from(cMap.entries())
+      .map(([name, d]) => ({ name, avg: d.ratings.reduce((a, b) => a + b, 0) / d.ratings.length, count: d.count }))
+      .sort((a, b) => b.avg - a.avg)
+
+    const aMap = new Map<string, number>()
+    s.forEach(x => aMap.set(x.atividade_nome, (aMap.get(x.atividade_nome) || 0) + 1))
+    const activityDist = Array.from(aMap.entries()).map(([n, c]) => ({ name: n, count: c })).sort((a, b) => b.count - a.count)
+
+    return { total, avgGroup, avgCond, relatos, conductorRanking, activityDist }
   }, [filteredSubmissions])
 
-  // ─── Conductor detail view ───────────────────────────────────────
+  // ─── Conductor detail ──────────────────────────────────────────
   const conductorDetail = useMemo(() => {
     if (!selectedCondutor) return null
-    const subs = filteredSubmissions.filter(s => s.condutores?.includes(selectedCondutor))
-    const ratings = subs.map(s => s.nota_condutor)
-    const avg = ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0
-    const relatos = subs.filter(s => s.relato).map(s => ({ relato: s.relato!, date: s.created_at }))
-
-    // Monthly trend
-    const monthlyMap = new Map<string, number[]>()
-    subs.forEach(s => {
-      const month = s.created_at.substring(0, 7)
-      const existing = monthlyMap.get(month) || []
-      existing.push(s.nota_condutor)
-      monthlyMap.set(month, existing)
-    })
-    const trend = Array.from(monthlyMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, r]) => ({
-        month,
-        avg: r.reduce((a, b) => a + b, 0) / r.length,
-        count: r.length,
-      }))
-
-    return { name: selectedCondutor, avgRating: avg, totalFeedbacks: subs.length, relatos, trend }
+    const s = filteredSubmissions.filter(x => x.condutores?.includes(selectedCondutor))
+    const avg = s.length > 0 ? s.reduce((a, x) => a + x.nota_condutor, 0) / s.length : 0
+    const relatos = s.filter(x => x.relato).map(x => ({ text: x.relato!, date: x.created_at }))
+    return { name: selectedCondutor, avg, total: s.length, relatos }
   }, [selectedCondutor, filteredSubmissions])
 
-  // ─── CRUD operations ─────────────────────────────────────────────
+  // ─── CRUD: Atividades ──────────────────────────────────────────
   async function addAtividade() {
     if (!newAtividade.trim()) return
-    await supabase.from('certificado_atividades').insert({ nome: newAtividade.trim() })
+    await adminApi({ action: 'create_atividade', nome: newAtividade.trim() })
     setNewAtividade('')
     loadData()
+    showToast('Atividade adicionada')
   }
 
   async function toggleAtividade(id: string, ativo: boolean) {
-    await supabase.from('certificado_atividades').update({ ativo: !ativo }).eq('id', id)
+    await adminApi({ action: 'toggle_atividade', id, ativo: !ativo })
     loadData()
   }
 
-  async function deleteAtividade(id: string) {
-    await supabase.from('certificado_atividades').delete().eq('id', id)
-    loadData()
+  function confirmDeleteAtividade(id: string, nome: string) {
+    setConfirmModal({
+      title: 'Excluir Atividade',
+      message: `Excluir "${nome}"?`,
+      onConfirm: async () => { await adminApi({ action: 'delete_atividade', id }); setConfirmModal(null); loadData(); showToast('Excluída') },
+    })
   }
 
+  // ─── CRUD: Condutores ──────────────────────────────────────────
   async function addCondutor() {
-    if (!newCondutor.trim()) return
-    await supabase.from('certificado_condutores').insert({ nome: newCondutor.trim() })
-    setNewCondutor('')
+    if (!newCondutorNome.trim()) return
+    await adminApi({ action: 'create_condutor', nome: newCondutorNome.trim() })
+    setNewCondutorNome('')
     loadData()
+    showToast('Condutor adicionado')
+  }
+
+  async function saveCondutor() {
+    if (!editingCondutor) return
+    await adminApi({
+      action: 'update_condutor',
+      id: editingCondutor.id,
+      nome: editingCondutor.nome.trim(),
+      telefone: editingCondutor.telefone?.trim() || null,
+      observacoes: editingCondutor.observacoes?.trim() || null,
+    })
+    setEditingCondutor(null)
+    loadData()
+    showToast('Condutor atualizado')
   }
 
   async function toggleCondutor(id: string, ativo: boolean) {
-    await supabase.from('certificado_condutores').update({ ativo: !ativo }).eq('id', id)
+    await adminApi({ action: 'toggle_condutor', id, ativo: !ativo })
     loadData()
   }
 
-  async function deleteCondutor(id: string) {
-    await supabase.from('certificado_condutores').delete().eq('id', id)
-    loadData()
+  function confirmDeleteCondutor(id: string, nome: string) {
+    setConfirmModal({
+      title: 'Excluir Condutor',
+      message: `Excluir "${nome}"?`,
+      onConfirm: async () => { await adminApi({ action: 'delete_condutor', id }); setConfirmModal(null); loadData(); showToast('Excluído') },
+    })
   }
+
+  // ─── Submissions ───────────────────────────────────────────────
+  function confirmDeleteSubmission(id: string, nome: string) {
+    setConfirmModal({
+      title: 'Excluir Envio',
+      message: `Excluir envio de "${nome}"?`,
+      onConfirm: async () => {
+        setActionLoading(true)
+        await adminApi({ action: 'delete_submissions', ids: [id] })
+        setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n })
+        setConfirmModal(null); setActionLoading(false); loadData(); showToast('Excluído')
+      },
+    })
+  }
+
+  function confirmBulkDelete() {
+    const c = selectedIds.size
+    if (!c) return
+    setConfirmModal({
+      title: `Excluir ${c} envio${c > 1 ? 's' : ''}`,
+      message: `Excluir ${c} envio${c > 1 ? 's' : ''} selecionado${c > 1 ? 's' : ''}?`,
+      onConfirm: async () => {
+        setActionLoading(true)
+        await adminApi({ action: 'delete_submissions', ids: Array.from(selectedIds) })
+        setSelectedIds(new Set()); setConfirmModal(null); setActionLoading(false); loadData(); showToast(`${c} excluído${c > 1 ? 's' : ''}`)
+      },
+    })
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  }
+
+  function exportCSV() {
+    const esc = (v: string) => v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v
+    const h = 'Nome,Email,Atividade,Nota Grupo,Condutores,Nota Condutor,Relato,Data'
+    const rows = visibleSubmissions.map(s => [esc(s.nome_completo), esc(s.email), esc(s.atividade_nome), s.nota_grupo, esc((s.condutores || []).join('; ')), s.nota_condutor, esc(s.relato || ''), new Date(s.created_at).toLocaleDateString('pt-BR')].join(','))
+    const blob = new Blob(['\uFEFF' + h + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `envios_${new Date().toISOString().split('T')[0]}.csv`; a.click()
+    showToast('CSV exportado')
+  }
+
+  const uniqueAtividades = useMemo(() => Array.from(new Set(submissions.map(s => s.atividade_nome))).sort(), [submissions])
+  const hasFilters = filterAtividade !== 'all' || filterDateFrom || filterDateTo
+
+  // ─── Render ────────────────────────────────────────────────────
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#1A1A1A' }}>
-        <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
-          style={{ borderColor: 'rgba(200,75,49,0.3)', borderTopColor: 'transparent' }} />
+        <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'rgba(200,75,49,0.3)', borderTopColor: 'transparent' }} />
       </div>
     )
   }
 
   return (
     <div className="min-h-screen" style={{ background: '#1A1A1A' }}>
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+            className="fixed top-4 right-4 z-50 px-4 py-3 rounded-xl font-dm text-sm"
+            style={{ backgroundColor: 'rgba(200,75,49,0.9)', color: '#fff', boxShadow: '0 8px 30px rgba(0,0,0,0.4)' }}>
+            {toast}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Confirm Modal */}
+      <AnimatePresence>
+        {confirmModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 flex items-center justify-center p-4"
+            style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+            onClick={() => !actionLoading && setConfirmModal(null)}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
+              onClick={e => e.stopPropagation()} className="w-full max-w-md rounded-2xl p-6 space-y-4"
+              style={{ backgroundColor: '#1A1A1A', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="flex items-center gap-3">
+                <AlertTriangle size={20} style={{ color: '#C84B31' }} />
+                <h3 className="font-fraunces font-bold" style={{ color: 'rgba(253,251,247,0.9)' }}>{confirmModal.title}</h3>
+              </div>
+              <p className="font-dm text-sm" style={{ color: 'rgba(253,251,247,0.5)' }}>{confirmModal.message}</p>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setConfirmModal(null)} disabled={actionLoading} className="font-dm text-sm px-4 py-2 rounded-xl"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.04)', color: 'rgba(253,251,247,0.5)' }}>Cancelar</button>
+                <button onClick={confirmModal.onConfirm} disabled={actionLoading} className="font-dm text-sm font-bold px-4 py-2 rounded-xl flex items-center gap-2"
+                  style={{ backgroundColor: '#C84B31', color: '#fff' }}>
+                  {actionLoading && <RefreshCw size={14} className="animate-spin" />} Confirmar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Certificate Preview Modal */}
+      <AnimatePresence>
+        {certificatePreview && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 flex items-center justify-center p-4"
+            style={{ backgroundColor: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setCertificatePreview(null)}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
+              onClick={e => e.stopPropagation()} className="w-full max-w-3xl rounded-2xl p-6 space-y-4"
+              style={{ backgroundColor: '#1A1A1A', border: '1px solid rgba(255,255,255,0.08)', maxHeight: '90vh', overflowY: 'auto' }}>
+              <div className="flex items-center justify-between">
+                <h3 className="font-fraunces font-bold" style={{ color: 'rgba(253,251,247,0.9)' }}>Certificado</h3>
+                <button onClick={() => setCertificatePreview(null)} style={{ color: 'rgba(253,251,247,0.4)' }}><X size={18} /></button>
+              </div>
+              <CertificateGenerator data={{ nomeParticipante: certificatePreview.nome_completo, atividade: certificatePreview.atividade_nome, data: certificatePreview.created_at.split('T')[0] }} />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Condutor Modal */}
+      <AnimatePresence>
+        {editingCondutor && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 flex items-center justify-center p-4"
+            style={{ backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setEditingCondutor(null)}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }}
+              onClick={e => e.stopPropagation()} className="w-full max-w-md rounded-2xl p-6 space-y-4"
+              style={{ backgroundColor: '#1A1A1A', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <h3 className="font-fraunces font-bold" style={{ color: 'rgba(253,251,247,0.9)' }}>Editar Condutor</h3>
+              <div className="space-y-3">
+                <div>
+                  <label className="font-dm text-xs mb-1 block" style={{ color: 'rgba(253,251,247,0.3)' }}>Nome</label>
+                  <input value={editingCondutor.nome} onChange={e => setEditingCondutor({ ...editingCondutor, nome: e.target.value })}
+                    className="w-full font-dm text-sm px-4 py-2.5 rounded-xl outline-none"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }} />
+                </div>
+                <div>
+                  <label className="font-dm text-xs mb-1 block" style={{ color: 'rgba(253,251,247,0.3)' }}>Telefone</label>
+                  <input value={editingCondutor.telefone || ''} onChange={e => setEditingCondutor({ ...editingCondutor, telefone: e.target.value })}
+                    placeholder="31999999999"
+                    className="w-full font-dm text-sm px-4 py-2.5 rounded-xl outline-none"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }} />
+                </div>
+                <div>
+                  <label className="font-dm text-xs mb-1 block" style={{ color: 'rgba(253,251,247,0.3)' }}>Observações</label>
+                  <textarea value={editingCondutor.observacoes || ''} onChange={e => setEditingCondutor({ ...editingCondutor, observacoes: e.target.value })}
+                    rows={3} placeholder="Observações sobre o condutor..."
+                    className="w-full font-dm text-sm px-4 py-2.5 rounded-xl outline-none resize-none"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }} />
+                </div>
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setEditingCondutor(null)} className="font-dm text-sm px-4 py-2 rounded-xl"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.04)', color: 'rgba(253,251,247,0.5)' }}>Cancelar</button>
+                <button onClick={saveCondutor} className="font-dm text-sm font-bold px-4 py-2 rounded-xl"
+                  style={{ backgroundColor: '#C84B31', color: '#fff' }}>Salvar</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div className="border-b" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="font-dm text-xs font-bold tracking-widest uppercase px-3 py-1 rounded-full"
-              style={{ backgroundColor: 'rgba(200,75,49,0.1)', color: '#C84B31', border: '1px solid rgba(200,75,49,0.2)' }}>
-              Certificados
-            </span>
-            <h1 className="font-fraunces font-bold text-lg" style={{ color: 'rgba(253,251,247,0.9)' }}>
-              Painel Administrativo
-            </h1>
-          </div>
-          <button
-            onClick={() => { sessionStorage.removeItem('certificados_admin'); window.location.reload() }}
-            className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}
-          >
-            Sair
-          </button>
+          <h1 className="font-fraunces font-bold text-lg" style={{ color: 'rgba(253,251,247,0.9)' }}>Admin</h1>
+          <button onClick={() => { sessionStorage.removeItem('certificados_admin'); window.location.reload() }}
+            className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>Sair</button>
         </div>
       </div>
 
       {/* Tabs */}
       <div className="border-b overflow-x-auto" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
         <div className="max-w-7xl mx-auto px-6 flex gap-1">
-          {(Object.keys(TAB_LABELS) as Tab[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => { setTab(t); setSelectedCondutor(null) }}
-              className="font-dm text-sm px-4 py-3 transition-all whitespace-nowrap relative"
-              style={{ color: tab === t ? '#C84B31' : 'rgba(253,251,247,0.4)' }}
-            >
+          {(Object.keys(TAB_LABELS) as Tab[]).map(t => (
+            <button key={t} onClick={() => { setTab(t); setSelectedCondutor(null) }}
+              className="font-dm text-sm px-4 py-3 whitespace-nowrap relative"
+              style={{ color: tab === t ? '#C84B31' : 'rgba(253,251,247,0.4)' }}>
               {TAB_LABELS[t]}
-              {tab === t && (
-                <motion.div layoutId="tab-indicator" className="absolute bottom-0 left-0 right-0 h-0.5"
-                  style={{ backgroundColor: '#C84B31' }} />
-              )}
+              {tab === t && <motion.div layoutId="tab" className="absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: '#C84B31' }} />}
             </button>
           ))}
         </div>
@@ -282,451 +431,362 @@ export default function AdminCertificados() {
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Time filter (for dashboard and conductor views) */}
-        {(tab === 'dashboard' || tab === 'condutores-view') && (
-          <div className="flex flex-wrap gap-2 mb-8">
-            {(Object.keys(TIME_LABELS) as TimeFilter[]).map((f) => (
-              <button
-                key={f}
-                onClick={() => setTimeFilter(f)}
-                className="font-dm text-xs px-4 py-2 rounded-full transition-all"
+        {/* Time filter for dashboard */}
+        {tab === 'dashboard' && (
+          <div className="flex flex-wrap gap-2 mb-6">
+            {(Object.keys(TIME_LABELS) as TimeFilter[]).map(f => (
+              <button key={f} onClick={() => setTimeFilter(f)} className="font-dm text-xs px-3 py-1.5 rounded-full"
                 style={{
                   backgroundColor: timeFilter === f ? 'rgba(200,75,49,0.12)' : 'rgba(255,255,255,0.03)',
                   color: timeFilter === f ? '#C84B31' : 'rgba(253,251,247,0.4)',
                   border: `1px solid ${timeFilter === f ? 'rgba(200,75,49,0.3)' : 'rgba(255,255,255,0.06)'}`,
-                }}
-              >
-                {TIME_LABELS[f]}
-              </button>
+                }}>{TIME_LABELS[f]}</button>
             ))}
           </div>
         )}
 
         <AnimatePresence mode="wait">
-          {/* ─── Dashboard Tab ─────────────────────────────────────── */}
+
+          {/* ─── Dashboard ──────────────────────────────────────── */}
           {tab === 'dashboard' && (
-            <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              {/* Metric cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <MetricCard icon={<FileText size={18} />} label="Certificados" value={metrics.totalSubmissions} />
-                <MetricCard icon={<Star size={18} />} label="Nota Grupo" value={metrics.avgGroupRating.toFixed(1)} suffix="/5" />
-                <MetricCard icon={<Users size={18} />} label="Nota Condutores" value={metrics.avgConductorRating.toFixed(1)} suffix="/5" />
-                <MetricCard icon={<MessageSquare size={18} />} label="Relatos" value={metrics.totalFeedbacks} />
+            <motion.div key="dash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <Stat icon={<FileText size={16} />} label="Certificados" value={metrics.total} />
+                <Stat icon={<Star size={16} />} label="Nota Grupo" value={metrics.avgGroup.toFixed(1)} suffix="/5" />
+                <Stat icon={<Users size={16} />} label="Nota Condutores" value={metrics.avgCond.toFixed(1)} suffix="/5" />
+                <Stat icon={<MessageSquare size={16} />} label="Relatos" value={metrics.relatos} />
               </div>
 
-              {/* Charts row */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                {/* Daily submissions chart */}
-                <Card title="Envios por Dia" icon={<BarChart3 size={16} />}>
-                  {metrics.dailyData.length > 0 ? (
-                    <div className="flex items-end gap-1 h-32">
-                      {metrics.dailyData.map(([date, count]) => {
-                        const maxCount = Math.max(...metrics.dailyData.map(([, c]) => c))
-                        const height = maxCount > 0 ? (count / maxCount) * 100 : 0
-                        return (
-                          <div key={date} className="flex-1 flex flex-col items-center gap-1 group relative">
-                            <div
-                              className="w-full rounded-t transition-all"
-                              style={{
-                                height: `${height}%`,
-                                minHeight: '4px',
-                                backgroundColor: 'rgba(200,75,49,0.6)',
-                              }}
-                            />
-                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 hidden group-hover:block px-2 py-1 rounded text-xs font-dm whitespace-nowrap"
-                              style={{ backgroundColor: 'rgba(0,0,0,0.8)', color: '#fff' }}>
-                              {date.slice(5)}: {count}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <p className="font-dm text-sm text-center py-8" style={{ color: 'rgba(253,251,247,0.3)' }}>
-                      Sem dados no período
-                    </p>
-                  )}
-                </Card>
-
-                {/* Activity distribution */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card title="Atividades" icon={<Award size={16} />}>
-                  <div className="space-y-3">
-                    {metrics.activityDist.map((a) => {
-                      const pct = metrics.totalSubmissions > 0 ? (a.count / metrics.totalSubmissions) * 100 : 0
-                      return (
-                        <div key={a.name}>
-                          <div className="flex justify-between mb-1">
-                            <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.6)' }}>{a.name}</span>
-                            <span className="font-dm text-xs font-bold" style={{ color: '#C84B31' }}>{a.count}</span>
-                          </div>
-                          <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}>
-                            <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: 'rgba(200,75,49,0.5)' }} />
-                          </div>
+                  {metrics.activityDist.length > 0 ? metrics.activityDist.map(a => {
+                    const pct = metrics.total > 0 ? (a.count / metrics.total) * 100 : 0
+                    return (
+                      <div key={a.name} className="mb-3">
+                        <div className="flex justify-between mb-1">
+                          <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.6)' }}>{a.name}</span>
+                          <span className="font-dm text-xs font-bold" style={{ color: '#C84B31' }}>{a.count}</span>
                         </div>
-                      )
-                    })}
-                    {metrics.activityDist.length === 0 && (
-                      <p className="font-dm text-sm text-center py-4" style={{ color: 'rgba(253,251,247,0.3)' }}>Sem dados</p>
-                    )}
-                  </div>
+                        <div className="h-1.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}>
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: 'rgba(200,75,49,0.5)' }} />
+                        </div>
+                      </div>
+                    )
+                  }) : <Empty message="Sem dados" />}
+                </Card>
+
+                <Card title="Ranking Condutores" icon={<TrendingUp size={16} />}>
+                  {metrics.conductorRanking.length > 0 ? metrics.conductorRanking.slice(0, 10).map((c, i) => (
+                    <button key={c.name} onClick={() => { setSelectedCondutor(c.name); setTab('condutores') }}
+                      className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/[0.02]">
+                      <span className="font-dm text-sm font-bold w-5" style={{ color: i < 3 ? '#C84B31' : 'rgba(253,251,247,0.3)' }}>{i + 1}</span>
+                      <span className="font-dm text-sm flex-1 text-left" style={{ color: 'rgba(253,251,247,0.7)' }}>{c.name}</span>
+                      <Star size={12} fill="#C84B31" stroke="#C84B31" />
+                      <span className="font-dm text-sm font-bold" style={{ color: '#C84B31' }}>{c.avg.toFixed(1)}</span>
+                      <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>{c.count}x</span>
+                    </button>
+                  )) : <Empty message="Sem dados" />}
                 </Card>
               </div>
-
-              {/* Conductor rankings */}
-              <Card title="Ranking de Condutores" icon={<TrendingUp size={16} />}>
-                <div className="space-y-2">
-                  {metrics.conductorMetrics.map((c, i) => (
-                    <button
-                      key={c.name}
-                      onClick={() => { setSelectedCondutor(c.name); setTab('condutores-view') }}
-                      className="w-full flex items-center gap-4 p-3 rounded-xl transition-all hover:bg-white/[0.02]"
-                    >
-                      <span className="font-dm text-sm font-bold w-6" style={{ color: i < 3 ? '#C84B31' : 'rgba(253,251,247,0.3)' }}>
-                        {i + 1}
-                      </span>
-                      <span className="font-dm text-sm flex-1 text-left" style={{ color: 'rgba(253,251,247,0.7)' }}>
-                        {c.name}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <Star size={12} fill="#C84B31" stroke="#C84B31" />
-                        <span className="font-dm text-sm font-bold" style={{ color: '#C84B31' }}>
-                          {c.avgRating.toFixed(1)}
-                        </span>
-                      </div>
-                      <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>
-                        {c.count} feedback{c.count !== 1 ? 's' : ''}
-                      </span>
-                      <ChevronRight size={14} style={{ color: 'rgba(253,251,247,0.2)' }} />
-                    </button>
-                  ))}
-                  {metrics.conductorMetrics.length === 0 && (
-                    <p className="font-dm text-sm text-center py-8" style={{ color: 'rgba(253,251,247,0.3)' }}>
-                      Sem dados de condutores no período
-                    </p>
-                  )}
-                </div>
-              </Card>
             </motion.div>
           )}
 
-          {/* ─── Conductor Detail Tab ──────────────────────────────── */}
-          {tab === 'condutores-view' && (
-            <motion.div key="condutores-view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+          {/* ─── Condutores (unified) ───────────────────────────── */}
+          {tab === 'condutores' && (
+            <motion.div key="cond" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+              {/* Conductor detail view */}
               {selectedCondutor && conductorDetail ? (
-                <div className="space-y-6">
-                  <button onClick={() => setSelectedCondutor(null)} className="font-dm text-sm flex items-center gap-2"
+                <div className="space-y-4">
+                  <button onClick={() => setSelectedCondutor(null)} className="font-dm text-xs flex items-center gap-1"
                     style={{ color: 'rgba(253,251,247,0.4)' }}>
-                    <ChevronDown size={14} className="rotate-90" /> Voltar ao ranking
+                    <ChevronRight size={12} className="rotate-180" /> Voltar
                   </button>
-
-                  <div className="flex items-center gap-4 mb-6">
-                    <div className="w-14 h-14 rounded-full flex items-center justify-center font-fraunces font-bold text-xl"
-                      style={{ backgroundColor: 'rgba(200,75,49,0.12)', color: '#C84B31' }}>
-                      {conductorDetail.name[0]}
-                    </div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center font-fraunces font-bold text-lg"
+                      style={{ backgroundColor: 'rgba(200,75,49,0.12)', color: '#C84B31' }}>{conductorDetail.name[0]}</div>
                     <div>
-                      <h2 className="font-fraunces font-bold text-xl" style={{ color: 'rgba(253,251,247,0.9)' }}>
-                        {conductorDetail.name}
-                      </h2>
-                      <div className="flex items-center gap-3 mt-1">
-                        <div className="flex items-center gap-1">
-                          <Star size={14} fill="#C84B31" stroke="#C84B31" />
-                          <span className="font-dm text-sm font-bold" style={{ color: '#C84B31' }}>
-                            {conductorDetail.avgRating.toFixed(1)}
-                          </span>
-                        </div>
-                        <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>
-                          {conductorDetail.totalFeedbacks} feedback{conductorDetail.totalFeedbacks !== 1 ? 's' : ''}
-                        </span>
+                      <h2 className="font-fraunces font-bold" style={{ color: 'rgba(253,251,247,0.9)' }}>{conductorDetail.name}</h2>
+                      <div className="flex items-center gap-2">
+                        <Star size={12} fill="#C84B31" stroke="#C84B31" />
+                        <span className="font-dm text-sm font-bold" style={{ color: '#C84B31' }}>{conductorDetail.avg.toFixed(1)}</span>
+                        <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>{conductorDetail.total} feedbacks</span>
                       </div>
                     </div>
                   </div>
-
-                  {/* Trend */}
-                  {conductorDetail.trend.length > 1 && (
-                    <Card title="Evolução das Avaliações" icon={<TrendingUp size={16} />}>
-                      <div className="flex items-end gap-3 h-32">
-                        {conductorDetail.trend.map((t) => {
-                          const height = (t.avg / 5) * 100
-                          return (
-                            <div key={t.month} className="flex-1 flex flex-col items-center gap-2">
-                              <div className="w-full rounded-t-lg" style={{ height: `${height}%`, backgroundColor: 'rgba(200,75,49,0.5)' }} />
-                              <span className="font-dm text-[10px]" style={{ color: 'rgba(253,251,247,0.3)' }}>
-                                {t.month.slice(5)}
-                              </span>
-                            </div>
-                          )
-                        })}
+                  <Card title="Relatos" icon={<MessageSquare size={16} />}>
+                    {conductorDetail.relatos.length > 0 ? conductorDetail.relatos.map((r, i) => (
+                      <div key={i} className="p-3 rounded-lg mb-2" style={{ backgroundColor: 'rgba(255,255,255,0.02)' }}>
+                        <p className="font-dm text-sm" style={{ color: 'rgba(253,251,247,0.6)' }}>&ldquo;{r.text}&rdquo;</p>
+                        <p className="font-dm text-xs mt-1" style={{ color: 'rgba(253,251,247,0.2)' }}>{new Date(r.date).toLocaleDateString('pt-BR')}</p>
                       </div>
-                    </Card>
-                  )}
-
-                  {/* Feedback list */}
-                  <Card title="Relatos Recebidos" icon={<MessageSquare size={16} />}>
-                    <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                      {conductorDetail.relatos.length > 0 ? conductorDetail.relatos.map((r, i) => (
-                        <div key={i} className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                          <p className="font-dm text-sm leading-relaxed" style={{ color: 'rgba(253,251,247,0.6)' }}>
-                            &ldquo;{r.relato}&rdquo;
-                          </p>
-                          <p className="font-dm text-xs mt-2" style={{ color: 'rgba(253,251,247,0.2)' }}>
-                            {new Date(r.date).toLocaleDateString('pt-BR')}
-                          </p>
-                        </div>
-                      )) : (
-                        <p className="font-dm text-sm text-center py-8" style={{ color: 'rgba(253,251,247,0.3)' }}>
-                          Nenhum relato escrito
-                        </p>
-                      )}
-                    </div>
+                    )) : <Empty message="Nenhum relato" />}
                   </Card>
                 </div>
               ) : (
-                /* Conductor list/ranking */
-                <Card title="Todos os Condutores" icon={<Users size={16} />}>
-                  <div className="space-y-2">
-                    {metrics.conductorMetrics.map((c, i) => (
-                      <button
-                        key={c.name}
-                        onClick={() => setSelectedCondutor(c.name)}
-                        className="w-full flex items-center gap-4 p-3 rounded-xl transition-all hover:bg-white/[0.02]"
-                      >
-                        <span className="font-dm text-sm font-bold w-6" style={{ color: i < 3 ? '#C84B31' : 'rgba(253,251,247,0.3)' }}>
-                          {i + 1}
-                        </span>
-                        <span className="font-dm text-sm flex-1 text-left" style={{ color: 'rgba(253,251,247,0.7)' }}>
-                          {c.name}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <Star size={12} fill="#C84B31" stroke="#C84B31" />
-                          <span className="font-dm text-sm font-bold" style={{ color: '#C84B31' }}>{c.avgRating.toFixed(1)}</span>
-                        </div>
-                        <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>
-                          {c.count} feedbacks
-                        </span>
-                        <ChevronRight size={14} style={{ color: 'rgba(253,251,247,0.2)' }} />
-                      </button>
-                    ))}
-                    {metrics.conductorMetrics.length === 0 && (
-                      <p className="font-dm text-sm text-center py-8" style={{ color: 'rgba(253,251,247,0.3)' }}>
-                        Sem dados no período selecionado
-                      </p>
-                    )}
+                <>
+                  {/* Add new */}
+                  <div className="flex gap-2">
+                    <input value={newCondutorNome} onChange={e => setNewCondutorNome(e.target.value)}
+                      placeholder="Novo condutor..." onKeyDown={e => e.key === 'Enter' && addCondutor()}
+                      className="font-dm flex-1 px-4 py-3 rounded-xl text-sm outline-none"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }} />
+                    <button onClick={addCondutor} className="px-4 py-3 rounded-xl" style={{ backgroundColor: '#C84B31', color: '#fff' }}>
+                      <Plus size={16} />
+                    </button>
                   </div>
-                </Card>
+
+                  {/* List */}
+                  <div className="space-y-2">
+                    {condutores.map(c => (
+                      <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl"
+                        style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', opacity: c.ativo ? 1 : 0.4 }}>
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center font-dm text-xs font-bold flex-shrink-0"
+                          style={{ backgroundColor: 'rgba(200,75,49,0.12)', color: '#C84B31' }}>{c.nome[0]}</div>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-dm text-sm font-medium block truncate" style={{ color: 'rgba(253,251,247,0.8)' }}>{c.nome}</span>
+                          {c.telefone && (
+                            <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>{c.telefone}</span>
+                          )}
+                          {c.observacoes && (
+                            <span className="font-dm text-xs block truncate italic" style={{ color: 'rgba(253,251,247,0.2)' }}>{c.observacoes}</span>
+                          )}
+                        </div>
+                        {/* WhatsApp */}
+                        {c.telefone && (
+                          <a href={`https://wa.me/55${c.telefone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg hover:bg-green-500/10 flex-shrink-0" title="WhatsApp">
+                            {WA_ICON}
+                          </a>
+                        )}
+                        {/* Ranking link */}
+                        <button onClick={() => setSelectedCondutor(c.nome)} className="p-1.5 rounded-lg hover:bg-white/[0.04] flex-shrink-0"
+                          style={{ color: 'rgba(253,251,247,0.2)' }} title="Ver feedbacks">
+                          <BarChart3 size={14} />
+                        </button>
+                        {/* Edit */}
+                        <button onClick={() => setEditingCondutor({ ...c })} className="p-1.5 rounded-lg hover:bg-white/[0.04] flex-shrink-0"
+                          style={{ color: 'rgba(253,251,247,0.2)' }} title="Editar">
+                          <Edit3 size={14} />
+                        </button>
+                        {/* Toggle */}
+                        <button onClick={() => toggleCondutor(c.id, c.ativo)} className="p-1.5 rounded-lg flex-shrink-0"
+                          style={{ color: c.ativo ? '#C84B31' : 'rgba(253,251,247,0.2)' }}>
+                          {c.ativo ? <Eye size={14} /> : <EyeOff size={14} />}
+                        </button>
+                        {/* Delete */}
+                        <button onClick={() => confirmDeleteCondutor(c.id, c.nome)} className="p-1.5 rounded-lg hover:bg-red-500/10 flex-shrink-0"
+                          style={{ color: 'rgba(253,251,247,0.15)' }}>
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    {condutores.length === 0 && <Empty message="Nenhum condutor" />}
+                  </div>
+                </>
               )}
             </motion.div>
           )}
 
-          {/* ─── Activities Management Tab ─────────────────────────── */}
+          {/* ─── Atividades ─────────────────────────────────────── */}
           {tab === 'atividades' && (
-            <motion.div key="atividades" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
-              <Card title="Gerenciar Atividades" icon={<Settings size={16} />}>
-                <div className="flex gap-2 mb-6">
-                  <input
-                    value={newAtividade}
-                    onChange={(e) => setNewAtividade(e.target.value)}
-                    placeholder="Nova atividade..."
-                    onKeyDown={(e) => e.key === 'Enter' && addAtividade()}
-                    className="font-dm flex-1 px-4 py-3 rounded-xl text-sm outline-none"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }}
-                  />
-                  <button onClick={addAtividade} className="px-4 py-3 rounded-xl font-dm text-sm font-bold"
-                    style={{ backgroundColor: '#C84B31', color: '#fff' }}>
-                    <Plus size={16} />
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {atividades.map((a) => (
-                    <div key={a.id} className="flex items-center gap-3 p-3 rounded-xl"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                      <span className="font-dm text-sm flex-1" style={{ color: a.ativo ? 'rgba(253,251,247,0.7)' : 'rgba(253,251,247,0.25)' }}>
-                        {a.nome}
-                      </span>
-                      <button onClick={() => toggleAtividade(a.id, a.ativo)}
-                        className="p-1.5 rounded-lg transition-all" style={{ color: a.ativo ? '#C84B31' : 'rgba(253,251,247,0.2)' }}>
-                        {a.ativo ? <Eye size={16} /> : <EyeOff size={16} />}
-                      </button>
-                      <button onClick={() => deleteAtividade(a.id)}
-                        className="p-1.5 rounded-lg transition-all" style={{ color: 'rgba(253,251,247,0.2)' }}>
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </Card>
+            <motion.div key="ativ" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+              <div className="flex gap-2">
+                <input value={newAtividade} onChange={e => setNewAtividade(e.target.value)}
+                  placeholder="Nova atividade..." onKeyDown={e => e.key === 'Enter' && addAtividade()}
+                  className="font-dm flex-1 px-4 py-3 rounded-xl text-sm outline-none"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }} />
+                <button onClick={addAtividade} className="px-4 py-3 rounded-xl" style={{ backgroundColor: '#C84B31', color: '#fff' }}>
+                  <Plus size={16} />
+                </button>
+              </div>
+              <div className="space-y-2">
+                {atividades.map(a => (
+                  <div key={a.id} className="flex items-center gap-3 p-3 rounded-xl"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                    <span className="font-dm text-sm flex-1" style={{ color: a.ativo ? 'rgba(253,251,247,0.7)' : 'rgba(253,251,247,0.25)' }}>{a.nome}</span>
+                    <button onClick={() => toggleAtividade(a.id, a.ativo)} className="p-1.5 rounded-lg"
+                      style={{ color: a.ativo ? '#C84B31' : 'rgba(253,251,247,0.2)' }}>
+                      {a.ativo ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                    <button onClick={() => confirmDeleteAtividade(a.id, a.nome)} className="p-1.5 rounded-lg hover:bg-red-500/10"
+                      style={{ color: 'rgba(253,251,247,0.15)' }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                {atividades.length === 0 && <Empty message="Nenhuma atividade" />}
+              </div>
             </motion.div>
           )}
 
-          {/* ─── Conductors Management Tab ─────────────────────────── */}
-          {tab === 'condutores' && (
-            <motion.div key="condutores" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
-              <Card title="Gerenciar Condutores" icon={<Users size={16} />}>
-                <div className="flex gap-2 mb-6">
-                  <input
-                    value={newCondutor}
-                    onChange={(e) => setNewCondutor(e.target.value)}
-                    placeholder="Novo condutor..."
-                    onKeyDown={(e) => e.key === 'Enter' && addCondutor()}
-                    className="font-dm flex-1 px-4 py-3 rounded-xl text-sm outline-none"
-                    style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }}
-                  />
-                  <button onClick={addCondutor} className="px-4 py-3 rounded-xl font-dm text-sm font-bold"
-                    style={{ backgroundColor: '#C84B31', color: '#fff' }}>
-                    <Plus size={16} />
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {condutoresList.map((c) => (
-                    <div key={c.id} className="flex items-center gap-3 p-3 rounded-xl"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                      <span className="font-dm text-sm flex-1" style={{ color: c.ativo ? 'rgba(253,251,247,0.7)' : 'rgba(253,251,247,0.25)' }}>
-                        {c.nome}
-                      </span>
-                      <button onClick={() => toggleCondutor(c.id, c.ativo)}
-                        className="p-1.5 rounded-lg transition-all" style={{ color: c.ativo ? '#C84B31' : 'rgba(253,251,247,0.2)' }}>
-                        {c.ativo ? <Eye size={16} /> : <EyeOff size={16} />}
-                      </button>
-                      <button onClick={() => deleteCondutor(c.id)}
-                        className="p-1.5 rounded-lg transition-all" style={{ color: 'rgba(253,251,247,0.2)' }}>
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </motion.div>
-          )}
-
-          {/* ─── Submissions Tab ───────────────────────────────────── */}
-          {tab === 'submissions' && (
-            <motion.div key="submissions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
-              {/* Search */}
-              <div className="flex items-center gap-3 px-4 py-3 rounded-xl"
+          {/* ─── Envios ─────────────────────────────────────────── */}
+          {tab === 'envios' && (
+            <motion.div key="envios" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+              {/* Search + Filters */}
+              <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl"
                 style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-                <Search size={16} style={{ color: 'rgba(253,251,247,0.3)' }} />
-                <input
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Buscar por nome ou email..."
-                  className="flex-1 bg-transparent font-dm text-sm outline-none"
-                  style={{ color: 'rgba(253,251,247,0.8)' }}
+                <Search size={14} style={{ color: 'rgba(253,251,247,0.3)' }} />
+                <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Buscar..."
+                  className="flex-1 bg-transparent font-dm text-sm outline-none" style={{ color: 'rgba(253,251,247,0.8)' }} />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <DarkSelect
+                  value={filterAtividade}
+                  onChange={v => setFilterAtividade(v)}
+                  placeholder="Todas atividades"
+                  options={[
+                    { value: 'all', label: 'Todas atividades' },
+                    ...uniqueAtividades.map(a => ({ value: a, label: a })),
+                  ]}
+                  size="sm"
                 />
+                <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+                  className="font-dm text-xs px-2 py-1.5 rounded-lg outline-none"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.7)' }} />
+                <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>até</span>
+                <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+                  className="font-dm text-xs px-2 py-1.5 rounded-lg outline-none"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.7)' }} />
+                {hasFilters && (
+                  <button onClick={() => { setFilterAtividade('all'); setFilterDateFrom(''); setFilterDateTo('') }}
+                    className="font-dm text-xs flex items-center gap-1" style={{ color: '#C84B31' }}>
+                    <X size={12} /> Limpar
+                  </button>
+                )}
               </div>
 
-              <Card title={`Envios Recentes (${submissions.length} total)`} icon={<FileText size={16} />}>
-                <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                  {submissions
-                    .filter(s => {
-                      if (!searchTerm) return true
-                      const term = searchTerm.toLowerCase()
-                      return s.nome_completo.toLowerCase().includes(term) ||
-                        s.email.toLowerCase().includes(term) ||
-                        (s.nome_social && s.nome_social.toLowerCase().includes(term))
-                    })
-                    .map((s) => (
-                      <div key={s.id} className="p-4 rounded-xl"
-                        style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-dm text-sm font-medium truncate" style={{ color: 'rgba(253,251,247,0.8)' }}>
-                                {s.nome_social || s.nome_completo}
-                              </span>
-                              {s.nome_social && (
-                                <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>
-                                  ({s.nome_completo})
-                                </span>
-                              )}
-                            </div>
-                            <p className="font-dm text-xs truncate" style={{ color: 'rgba(253,251,247,0.3)' }}>{s.email}</p>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <span className="font-dm text-xs px-2 py-1 rounded-full"
-                              style={{ backgroundColor: 'rgba(200,75,49,0.1)', color: '#C84B31' }}>
-                              {s.atividade_nome}
-                            </span>
-                            <p className="font-dm text-xs mt-1" style={{ color: 'rgba(253,251,247,0.2)' }}>
-                              {new Date(s.created_at).toLocaleDateString('pt-BR')}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-4 mt-3">
-                          <div className="flex items-center gap-1">
-                            <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>Grupo:</span>
-                            <div className="flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map(n => (
-                                <Star key={n} size={10}
-                                  fill={n <= s.nota_grupo ? '#C84B31' : 'transparent'}
-                                  stroke={n <= s.nota_grupo ? '#C84B31' : 'rgba(253,251,247,0.15)'}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>Condutor:</span>
-                            <div className="flex gap-0.5">
-                              {[1, 2, 3, 4, 5].map(n => (
-                                <Star key={n} size={10}
-                                  fill={n <= s.nota_condutor ? '#C84B31' : 'transparent'}
-                                  stroke={n <= s.nota_condutor ? '#C84B31' : 'rgba(253,251,247,0.15)'}
-                                />
-                              ))}
-                            </div>
-                          </div>
-                          {s.condutores?.length > 0 && (
-                            <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>
-                              {s.condutores.join(', ')}
-                            </span>
-                          )}
-                        </div>
-                        {s.relato && (
-                          <p className="font-dm text-xs mt-3 leading-relaxed italic"
-                            style={{ color: 'rgba(253,251,247,0.4)' }}>
-                            &ldquo;{s.relato}&rdquo;
-                          </p>
-                        )}
+              {/* Toolbar */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button onClick={selectedIds.size === visibleSubmissions.length && visibleSubmissions.length > 0 ? () => setSelectedIds(new Set()) : () => setSelectedIds(new Set(visibleSubmissions.map(s => s.id)))}
+                  className="font-dm text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.03)', color: 'rgba(253,251,247,0.5)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  {selectedIds.size > 0 ? <CheckSquare size={12} /> : <Square size={12} />}
+                  {selectedIds.size > 0 ? `${selectedIds.size} selecionados` : 'Selecionar'}
+                </button>
+                {selectedIds.size > 0 && (
+                  <button onClick={confirmBulkDelete} className="font-dm text-xs font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
+                    style={{ backgroundColor: 'rgba(220,38,38,0.1)', color: '#ef4444' }}>
+                    <Trash2 size={12} /> Excluir
+                  </button>
+                )}
+                <button onClick={exportCSV} className="font-dm text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg ml-auto"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.03)', color: 'rgba(253,251,247,0.5)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <Download size={12} /> CSV
+                </button>
+              </div>
+
+              {/* List */}
+              <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                {visibleSubmissions.map(s => (
+                  <div key={s.id} className="flex gap-3 p-3 rounded-xl"
+                    style={{ backgroundColor: selectedIds.has(s.id) ? 'rgba(200,75,49,0.05)' : 'rgba(255,255,255,0.02)', border: `1px solid ${selectedIds.has(s.id) ? 'rgba(200,75,49,0.15)' : 'rgba(255,255,255,0.04)'}` }}>
+                    <button onClick={() => toggleSelect(s.id)} className="flex-shrink-0 mt-0.5"
+                      style={{ color: selectedIds.has(s.id) ? '#C84B31' : 'rgba(253,251,247,0.15)' }}>
+                      {selectedIds.has(s.id) ? <CheckSquare size={16} /> : <Square size={16} />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-dm text-sm font-medium truncate" style={{ color: 'rgba(253,251,247,0.8)' }}>{s.nome_completo}</span>
+                        <span className="font-dm text-xs px-2 py-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: 'rgba(200,75,49,0.1)', color: '#C84B31' }}>{s.atividade_nome}</span>
                       </div>
-                    ))}
-                </div>
-              </Card>
+                      <p className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>{s.email} · {new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>Grupo: {s.nota_grupo}/5</span>
+                        <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>Condutor: {s.nota_condutor}/5</span>
+                        {s.condutores?.length > 0 && <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.2)' }}>{s.condutores.join(', ')}</span>}
+                      </div>
+                      {s.relato && <p className="font-dm text-xs mt-1 italic" style={{ color: 'rgba(253,251,247,0.3)' }}>&ldquo;{s.relato}&rdquo;</p>}
+                    </div>
+                    <div className="flex flex-col gap-1 flex-shrink-0">
+                      <button onClick={() => setCertificatePreview(s)} className="p-1 rounded-lg hover:bg-white/[0.05]"
+                        style={{ color: 'rgba(253,251,247,0.3)' }} title="Certificado"><Download size={13} /></button>
+                      <button onClick={() => confirmDeleteSubmission(s.id, s.nome_completo)} className="p-1 rounded-lg hover:bg-red-500/10"
+                        style={{ color: 'rgba(253,251,247,0.15)' }} title="Excluir"><Trash2 size={13} /></button>
+                    </div>
+                  </div>
+                ))}
+                {visibleSubmissions.length === 0 && <Empty message={hasFilters || searchTerm ? 'Nenhum resultado' : 'Nenhum envio'} />}
+              </div>
             </motion.div>
           )}
+
+          {/* ─── Formação ───────────────────────────────────────── */}
+          {tab === 'formacao' && (
+            <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <FormacaoBase atividades={atividades} />
+            </motion.div>
+          )}
+
         </AnimatePresence>
       </div>
     </div>
   )
 }
 
-// ─── Helper Components ─────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────
 
-function MetricCard({ icon, label, value, suffix }: {
-  icon: React.ReactNode; label: string; value: string | number; suffix?: string
-}) {
+function Stat({ icon, label, value, suffix }: { icon: React.ReactNode; label: string; value: string | number; suffix?: string }) {
   return (
-    <div className="p-5 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
-      <div className="flex items-center gap-2 mb-3" style={{ color: '#C84B31' }}>
+    <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="flex items-center gap-2 mb-2" style={{ color: '#C84B31' }}>
         {icon}
         <span className="font-dm text-xs uppercase tracking-wider" style={{ color: 'rgba(253,251,247,0.3)' }}>{label}</span>
       </div>
-      <div className="flex items-baseline gap-1">
-        <span className="font-fraunces font-bold text-2xl" style={{ color: 'rgba(253,251,247,0.9)' }}>{value}</span>
-        {suffix && <span className="font-dm text-sm" style={{ color: 'rgba(253,251,247,0.3)' }}>{suffix}</span>}
-      </div>
+      <span className="font-fraunces font-bold text-2xl" style={{ color: 'rgba(253,251,247,0.9)' }}>{value}</span>
+      {suffix && <span className="font-dm text-sm ml-1" style={{ color: 'rgba(253,251,247,0.3)' }}>{suffix}</span>}
     </div>
   )
 }
 
-function Card({ title, icon, children }: {
-  title: string; icon: React.ReactNode; children: React.ReactNode
-}) {
+function Card({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl p-6" style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
-      <div className="flex items-center gap-2 mb-5">
+    <div className="rounded-xl p-5" style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="flex items-center gap-2 mb-4">
         <span style={{ color: '#C84B31' }}>{icon}</span>
         <h3 className="font-dm text-sm font-medium" style={{ color: 'rgba(253,251,247,0.6)' }}>{title}</h3>
       </div>
       {children}
+    </div>
+  )
+}
+
+function Empty({ message }: { message: string }) {
+  return <p className="font-dm text-sm text-center py-8" style={{ color: 'rgba(253,251,247,0.2)' }}>{message}</p>
+}
+
+function DarkSelect({ value, onChange, placeholder, options, size = 'sm' }: {
+  value: string; onChange: (v: string) => void
+  placeholder: string; options: { value: string; label: string }[]
+  size?: 'xs' | 'sm'
+}) {
+  const [open, setOpen] = useState(false)
+  const selected = options.find(o => o.value === value)
+  const fontSize = size === 'xs' ? 'text-[10px]' : 'text-xs'
+  const py = size === 'xs' ? 'py-0.5 px-1.5' : 'py-1.5 px-3'
+
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen(!open)}
+        className={`font-dm ${fontSize} ${py} rounded-lg outline-none cursor-pointer flex items-center gap-1.5`}
+        style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.7)' }}>
+        <span>{selected?.label || placeholder}</span>
+        <ChevronDown size={10} style={{ opacity: 0.4 }} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute top-full left-0 mt-1 z-20 min-w-full max-h-48 overflow-y-auto rounded-lg py-1"
+            style={{ backgroundColor: '#1A1A1A', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 8px 30px rgba(0,0,0,0.5)' }}>
+            {options.map(o => (
+              <button key={o.value} onClick={() => { onChange(o.value); setOpen(false) }}
+                className={`w-full text-left font-dm ${fontSize} px-3 py-1.5 whitespace-nowrap transition-all hover:bg-white/[0.06]`}
+                style={{ color: o.value === value ? '#C84B31' : 'rgba(253,251,247,0.7)' }}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

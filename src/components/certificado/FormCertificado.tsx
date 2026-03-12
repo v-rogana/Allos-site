@@ -404,7 +404,6 @@ export default function FormCertificado() {
                     <CertificateGenerator
                       data={{
                         nomeParticipante: nomeCompleto,
-                        nomeSocial: nomeSocial || undefined,
                         atividade: atividadeSelecionada,
                         data: new Date().toISOString().split('T')[0],
                       }}

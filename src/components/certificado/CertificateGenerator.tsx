@@ -1,10 +1,10 @@
 'use client'
 
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback, useState } from 'react'
+import { jsPDF } from 'jspdf'
 
 interface CertificateData {
   nomeParticipante: string
-  nomeSocial?: string
   atividade: string
   data: string
 }
@@ -25,150 +25,153 @@ function formatDatePtBR(dateStr: string): string {
 
 export default function CertificateGenerator({ data, onReady }: CertificateGeneratorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const templateRef = useRef<HTMLImageElement | null>(null)
+  const [templateLoaded, setTemplateLoaded] = useState(false)
+
+  // Pre-load template image (PDF rendered as PNG)
+  useEffect(() => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      templateRef.current = img
+      setTemplateLoaded(true)
+    }
+    img.src = '/certificado-template.png'
+  }, [])
 
   const drawCertificate = useCallback((ctx: CanvasRenderingContext2D, w: number, h: number) => {
-    // White background
-    ctx.fillStyle = '#FFFFFF'
-    ctx.fillRect(0, 0, w, h)
+    const tpl = templateRef.current
+    if (!tpl) return
 
-    // Decorative border
-    drawBorder(ctx, w, h)
+    // Draw the full PDF template as background (border + signature + everything)
+    ctx.drawImage(tpl, 0, 0, w, h)
 
     const cx = w / 2
-    const displayName = data.nomeSocial || data.nomeParticipante
+    const displayName = data.nomeParticipante
 
-    // Allos header
     ctx.textAlign = 'center'
 
+    // -- Dynamic content on top of the template --
+
     // Allos icon (circles)
-    drawAllosIcon(ctx, cx, 100, 28)
+    drawAllosIcon(ctx, cx, h * 0.095, 32)
 
     // Association name
-    ctx.font = 'bold 28px Georgia, serif'
+    ctx.font = 'bold 32px Georgia, serif'
     ctx.fillStyle = '#1A1A1A'
-    ctx.fillText('ASSOCIAÇÃO ALLOS', cx, 155)
+    ctx.fillText('ASSOCIAÇÃO ALLOS', cx, h * 0.145)
 
-    ctx.font = '13px "Helvetica Neue", Arial, sans-serif'
+    ctx.font = '14px "Helvetica Neue", Arial, sans-serif'
     ctx.fillStyle = '#5C5C5C'
     ctx.letterSpacing = '3px'
-    ctx.fillText('PSICOLOGIA  •  FORMAÇÃO  •  PESQUISA', cx, 178)
+    ctx.fillText('PSICOLOGIA  •  FORMAÇÃO  •  PESQUISA', cx, h * 0.17)
 
-    // Divider line
+    // Accent divider
     ctx.beginPath()
-    ctx.moveTo(cx - 120, 200)
-    ctx.lineTo(cx + 120, 200)
+    ctx.moveTo(cx - 120, h * 0.19)
+    ctx.lineTo(cx + 120, h * 0.19)
     ctx.strokeStyle = '#C84B31'
     ctx.lineWidth = 1.5
     ctx.stroke()
 
     // Certificate title
-    ctx.font = 'bold 36px Georgia, serif'
+    ctx.font = 'bold 40px Georgia, serif'
     ctx.fillStyle = '#1A1A1A'
-    ctx.fillText('CERTIFICADO', cx, 258)
-    ctx.font = '16px "Helvetica Neue", Arial, sans-serif'
+    ctx.fillText('CERTIFICADO', cx, h * 0.25)
+    ctx.font = '17px "Helvetica Neue", Arial, sans-serif'
     ctx.fillStyle = '#5C5C5C'
-    ctx.fillText('DE PARTICIPAÇÃO', cx, 282)
+    ctx.fillText('DE PARTICIPAÇÃO', cx, h * 0.28)
 
-    // Body text
-    const bodyY = 340
-    ctx.font = '16px "Helvetica Neue", Arial, sans-serif'
+    // Body
+    const bodyY = h * 0.35
+    ctx.font = '17px "Helvetica Neue", Arial, sans-serif'
     ctx.fillStyle = '#333333'
     ctx.fillText('Certificamos que', cx, bodyY)
 
     // Participant name
-    ctx.font = 'bold italic 30px Georgia, serif'
+    ctx.font = 'bold italic 34px Georgia, serif'
     ctx.fillStyle = '#C84B31'
-    ctx.fillText(displayName, cx, bodyY + 50)
+    ctx.fillText(displayName, cx, bodyY + h * 0.055)
 
     // Decorative line under name
     const nameWidth = ctx.measureText(displayName).width
     ctx.beginPath()
-    ctx.moveTo(cx - nameWidth / 2 - 20, bodyY + 62)
-    ctx.lineTo(cx + nameWidth / 2 + 20, bodyY + 62)
+    ctx.moveTo(cx - nameWidth / 2 - 20, bodyY + h * 0.07)
+    ctx.lineTo(cx + nameWidth / 2 + 20, bodyY + h * 0.07)
     ctx.strokeStyle = 'rgba(200,75,49,0.3)'
     ctx.lineWidth = 1
     ctx.stroke()
 
-    // Activity text
-    ctx.font = '16px "Helvetica Neue", Arial, sans-serif'
+    // Activity
+    ctx.font = '17px "Helvetica Neue", Arial, sans-serif'
     ctx.fillStyle = '#333333'
-    ctx.fillText('participou da atividade', cx, bodyY + 100)
+    ctx.fillText('participou da atividade', cx, bodyY + h * 0.115)
 
-    ctx.font = 'bold 22px Georgia, serif'
+    ctx.font = 'bold 24px Georgia, serif'
     ctx.fillStyle = '#1A1A1A'
-    ctx.fillText(`"${data.atividade}"`, cx, bodyY + 135)
+    ctx.fillText(`\u201C${data.atividade}\u201D`, cx, bodyY + h * 0.155)
 
     // Details
-    ctx.font = '16px "Helvetica Neue", Arial, sans-serif'
+    ctx.font = '17px "Helvetica Neue", Arial, sans-serif'
     ctx.fillStyle = '#333333'
-    ctx.fillText('promovida pela Associação Allos, com carga horária de', cx, bodyY + 175)
+    ctx.fillText('promovida pela Associação Allos, com carga horária de', cx, bodyY + h * 0.2)
 
-    ctx.font = 'bold 18px Georgia, serif'
+    ctx.font = 'bold 20px Georgia, serif'
     ctx.fillStyle = '#1A1A1A'
-    ctx.fillText('2 (duas) horas', cx, bodyY + 205)
+    ctx.fillText('2 (duas) horas', cx, bodyY + h * 0.235)
 
     // Date
-    ctx.font = '16px "Helvetica Neue", Arial, sans-serif'
+    ctx.font = '17px "Helvetica Neue", Arial, sans-serif'
     ctx.fillStyle = '#333333'
-    ctx.fillText(`realizada em ${formatDatePtBR(data.data)}.`, cx, bodyY + 240)
+    ctx.fillText(`realizada em ${formatDatePtBR(data.data)}.`, cx, bodyY + h * 0.275)
 
-    // Belo Horizonte date
-    ctx.font = 'italic 14px Georgia, serif'
+    // Belo Horizonte
+    ctx.font = 'italic 15px Georgia, serif'
     ctx.fillStyle = '#5C5C5C'
-    ctx.fillText(`Belo Horizonte, ${formatDatePtBR(data.data)}`, cx, bodyY + 290)
+    ctx.fillText(`Belo Horizonte, ${formatDatePtBR(data.data)}`, cx, bodyY + h * 0.32)
 
-    // Signature area
-    const sigY = h - 160
+    // Signature area is already in the template image - no need to draw it!
 
-    // Signature line
-    ctx.beginPath()
-    ctx.moveTo(cx - 130, sigY)
-    ctx.lineTo(cx + 130, sigY)
-    ctx.strokeStyle = '#333333'
-    ctx.lineWidth = 0.8
-    ctx.stroke()
-
-    // Signature text
-    ctx.font = 'bold 14px Georgia, serif'
-    ctx.fillStyle = '#1A1A1A'
-    ctx.textAlign = 'center'
-    ctx.fillText('João de Bragança e Moreira', cx, sigY + 20)
-
-    ctx.font = '12px "Helvetica Neue", Arial, sans-serif'
-    ctx.fillStyle = '#5C5C5C'
-    ctx.fillText('Secretário Geral', cx, sigY + 38)
-    ctx.fillText('CRP-04/75654', cx, sigY + 54)
-
-    // CNPJ
-    ctx.font = '11px "Helvetica Neue", Arial, sans-serif'
-    ctx.fillStyle = '#888888'
-    ctx.fillText('CNPJ Emissor: 50.990.346/0001-52', cx, sigY + 82)
-
-  }, [data])
+  }, [data, templateLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!templateLoaded) return
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const w = 1122
-    const h = 794
+    // Match template resolution
+    const tpl = templateRef.current
+    if (!tpl) return
+    const w = tpl.naturalWidth
+    const h = tpl.naturalHeight
     canvas.width = w
     canvas.height = h
 
     drawCertificate(ctx, w, h)
     onReady?.()
-  }, [data, drawCertificate, onReady])
+  }, [data, drawCertificate, onReady, templateLoaded])
 
   const handleDownload = () => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const link = document.createElement('a')
-    const displayName = data.nomeSocial || data.nomeParticipante
-    link.download = `Certificado_Allos_${displayName.replace(/\s+/g, '_')}.png`
-    link.href = canvas.toDataURL('image/png', 1.0)
-    link.click()
+
+    const displayName = data.nomeParticipante
+
+    // Create landscape PDF
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4',
+    })
+
+    const pdfW = pdf.internal.pageSize.getWidth()
+    const pdfH = pdf.internal.pageSize.getHeight()
+
+    const imgData = canvas.toDataURL('image/png', 1.0)
+    pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH)
+    pdf.save(`Certificado_Allos_${displayName.replace(/\s+/g, '_')}.pdf`)
   }
 
   return (
@@ -189,7 +192,7 @@ export default function CertificateGenerator({ data, onReady }: CertificateGener
           boxShadow: '0 4px 20px rgba(200,75,49,0.35)',
         }}
       >
-        Baixar Certificado
+        Baixar Certificado (PDF)
       </button>
     </div>
   )
@@ -198,116 +201,20 @@ export default function CertificateGenerator({ data, onReady }: CertificateGener
 function drawAllosIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
   ctx.strokeStyle = '#2E9E8F'
 
-  // Outer dashed circle
   ctx.setLineDash([6, 4])
   ctx.lineWidth = 1
   ctx.beginPath()
   ctx.arc(cx, cy, r, 0, Math.PI * 2)
   ctx.stroke()
 
-  // Middle circle
   ctx.setLineDash([])
   ctx.lineWidth = 1.2
   ctx.beginPath()
   ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2)
   ctx.stroke()
 
-  // Center dot
   ctx.fillStyle = '#2E9E8F'
   ctx.beginPath()
   ctx.arc(cx, cy, r * 0.15, 0, Math.PI * 2)
   ctx.fill()
-}
-
-function drawBorder(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  const m = 30
-  const m2 = 38
-  const m3 = 42
-
-  // Outer border
-  ctx.strokeStyle = '#4A7BA7'
-  ctx.lineWidth = 2
-  ctx.strokeRect(m, m, w - m * 2, h - m * 2)
-
-  // Middle decorative border
-  ctx.strokeStyle = '#6B9DC4'
-  ctx.lineWidth = 0.8
-  ctx.setLineDash([12, 4])
-  ctx.strokeRect(m2, m2, w - m2 * 2, h - m2 * 2)
-  ctx.setLineDash([])
-
-  // Inner border
-  ctx.strokeStyle = '#4A7BA7'
-  ctx.lineWidth = 1.5
-  ctx.strokeRect(m3, m3, w - m3 * 2, h - m3 * 2)
-
-  // Corner decorations
-  const corners = [
-    [m + 5, m + 5],
-    [w - m - 5, m + 5],
-    [m + 5, h - m - 5],
-    [w - m - 5, h - m - 5],
-  ]
-
-  corners.forEach(([x, y]) => {
-    ctx.fillStyle = '#4A7BA7'
-    ctx.beginPath()
-    ctx.arc(x, y, 3, 0, Math.PI * 2)
-    ctx.fill()
-  })
-
-  // Guilloche-like decorative lines (top and bottom)
-  drawGuilloche(ctx, w, m, h, m)
-}
-
-function drawGuilloche(ctx: CanvasRenderingContext2D, w: number, topM: number, h: number, bottomM: number) {
-  ctx.save()
-  ctx.globalAlpha = 0.08
-
-  // Subtle wave patterns along borders
-  for (let i = 0; i < 6; i++) {
-    ctx.beginPath()
-    ctx.strokeStyle = '#4A7BA7'
-    ctx.lineWidth = 0.5
-    for (let x = 50; x < w - 50; x += 2) {
-      const y = topM + 4 + Math.sin((x + i * 30) * 0.03) * 3
-      if (x === 50) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    }
-    ctx.stroke()
-  }
-
-  for (let i = 0; i < 6; i++) {
-    ctx.beginPath()
-    ctx.strokeStyle = '#4A7BA7'
-    ctx.lineWidth = 0.5
-    for (let x = 50; x < w - 50; x += 2) {
-      const y = h - bottomM - 4 + Math.sin((x + i * 30) * 0.03) * 3
-      if (x === 50) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    }
-    ctx.stroke()
-  }
-
-  // Diagonal decorative lines in corners
-  const size = 60
-  const positions = [
-    { x: 50, y: 50, dx: 1, dy: 1 },
-    { x: w - 50, y: 50, dx: -1, dy: 1 },
-    { x: 50, y: h - 50, dx: 1, dy: -1 },
-    { x: w - 50, y: h - 50, dx: -1, dy: -1 },
-  ]
-
-  positions.forEach(({ x, y, dx, dy }) => {
-    for (let i = 0; i < 8; i++) {
-      ctx.beginPath()
-      ctx.strokeStyle = '#C84B31'
-      ctx.lineWidth = 0.4
-      ctx.moveTo(x, y + dy * i * 4)
-      ctx.lineTo(x + dx * size, y + dy * (size + i * 4))
-      ctx.stroke()
-    }
-  })
-
-  ctx.restore()
 }
