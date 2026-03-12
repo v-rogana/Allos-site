@@ -13,6 +13,7 @@ interface Avaliacao {
   aprofundamento: number; hipoteses: number; interpretacao: number
   frase_timing: number; corpo_setting: number; insight_potencia: number
   observacoes: string|null; avaliador_nome: string; avaliado_nome: string|null
+  [key: string]: unknown
 }
 
 const CRITERIOS = [
