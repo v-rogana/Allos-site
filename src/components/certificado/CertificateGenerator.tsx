@@ -7,6 +7,9 @@ interface CertificateData {
   nomeParticipante: string
   atividade: string
   data: string
+  tipo?: 'participação' | 'conclusão' | 'supervisão' | 'palestra' | 'organização'
+  cargaHoraria?: number
+  cargaHorariaExtenso?: string
 }
 
 interface CertificateGeneratorProps {
@@ -23,143 +26,206 @@ function formatDatePtBR(dateStr: string): string {
   return `${d.getDate()} de ${months[d.getMonth()]} de ${d.getFullYear()}`
 }
 
-export default function CertificateGenerator({ data, onReady }: CertificateGeneratorProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const templateRef = useRef<HTMLImageElement | null>(null)
-  const [templateLoaded, setTemplateLoaded] = useState(false)
-
-  // Pre-load template image (PDF rendered as PNG)
-  useEffect(() => {
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    img.onload = () => {
-      templateRef.current = img
-      setTemplateLoaded(true)
-    }
-    img.src = '/certificado-template.png'
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = src
+  })
+}
+
+export default function CertificateGenerator({ data, onReady }: CertificateGeneratorProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [signatureImg, setSignatureImg] = useState<HTMLImageElement | null>(null)
+
+  useEffect(() => {
+    loadImage('/assinatura.jpg').then(setSignatureImg).catch(() => {})
   }, [])
 
   const drawCertificate = useCallback((ctx: CanvasRenderingContext2D, w: number, h: number) => {
-    const tpl = templateRef.current
-    if (!tpl) return
-
-    // Draw the full PDF template as background (border + signature + everything)
-    ctx.drawImage(tpl, 0, 0, w, h)
-
+    const name = data.nomeParticipante
+    const ch = data.cargaHoraria || 2
+    const chExt = data.cargaHorariaExtenso || 'duas'
+    const dateStr = formatDatePtBR(data.data)
+    const tipo = data.tipo || 'participação'
     const cx = w / 2
-    const displayName = data.nomeParticipante
 
-    ctx.textAlign = 'center'
+    // ── White background ──
+    ctx.fillStyle = '#FFFFFF'
+    ctx.fillRect(0, 0, w, h)
 
-    // -- Dynamic content on top of the template --
+    // ── Top border: teal line with terracotta accent ──
+    ctx.fillStyle = '#1a3a3a'
+    ctx.fillRect(0, 0, w, 12)
+    ctx.fillStyle = '#c0392b'
+    ctx.fillRect(w * 0.4, 0, w * 0.2, 12)
 
-    // Allos icon (circles)
-    drawAllosIcon(ctx, cx, h * 0.095, 32)
+    // ── Bottom border ──
+    ctx.fillStyle = '#1a3a3a'
+    ctx.fillRect(0, h - 12, w, 12)
+    ctx.fillStyle = '#c0392b'
+    ctx.fillRect(w * 0.4, h - 12, w * 0.2, 12)
 
-    // Association name
-    ctx.font = 'bold 32px Georgia, serif'
-    ctx.fillStyle = '#1A1A1A'
-    ctx.fillText('ASSOCIAÇÃO ALLOS', cx, h * 0.145)
-
-    ctx.font = '14px "Helvetica Neue", Arial, sans-serif'
-    ctx.fillStyle = '#5C5C5C'
-    ctx.letterSpacing = '3px'
-    ctx.fillText('PSICOLOGIA  •  FORMAÇÃO  •  PESQUISA', cx, h * 0.17)
-
-    // Accent divider
-    ctx.beginPath()
-    ctx.moveTo(cx - 120, h * 0.19)
-    ctx.lineTo(cx + 120, h * 0.19)
-    ctx.strokeStyle = '#C84B31'
-    ctx.lineWidth = 1.5
-    ctx.stroke()
-
-    // Certificate title
-    ctx.font = 'bold 40px Georgia, serif'
-    ctx.fillStyle = '#1A1A1A'
-    ctx.fillText('CERTIFICADO', cx, h * 0.25)
-    ctx.font = '17px "Helvetica Neue", Arial, sans-serif'
-    ctx.fillStyle = '#5C5C5C'
-    ctx.fillText('DE PARTICIPAÇÃO', cx, h * 0.28)
-
-    // Body
-    const bodyY = h * 0.35
-    ctx.font = '17px "Helvetica Neue", Arial, sans-serif'
-    ctx.fillStyle = '#333333'
-    ctx.fillText('Certificamos que', cx, bodyY)
-
-    // Participant name
-    ctx.font = 'bold italic 34px Georgia, serif'
-    ctx.fillStyle = '#C84B31'
-    ctx.fillText(displayName, cx, bodyY + h * 0.055)
-
-    // Decorative line under name
-    const nameWidth = ctx.measureText(displayName).width
-    ctx.beginPath()
-    ctx.moveTo(cx - nameWidth / 2 - 20, bodyY + h * 0.07)
-    ctx.lineTo(cx + nameWidth / 2 + 20, bodyY + h * 0.07)
-    ctx.strokeStyle = 'rgba(200,75,49,0.3)'
+    // ── Thin inner frame ──
+    const fm = 40
+    ctx.strokeStyle = 'rgba(26,58,58,0.12)'
     ctx.lineWidth = 1
+    ctx.strokeRect(fm, fm, w - fm * 2, h - fm * 2)
+
+    // ── Header: ASSOCIAÇÃO ALLOS ──
+    ctx.textAlign = 'center'
+    ctx.font = '700 28px "Helvetica Neue", Arial, sans-serif'
+    ctx.fillStyle = '#1a3a3a'
+    ctx.letterSpacing = '8px'
+    ctx.fillText('ASSOCIAÇÃO ALLOS', cx, 110)
+    ctx.letterSpacing = '0px'
+
+    ctx.font = '400 16px "Helvetica Neue", Arial, sans-serif'
+    ctx.fillStyle = '#888888'
+    ctx.letterSpacing = '4px'
+    ctx.fillText('PSICOLOGIA  ·  FORMAÇÃO  ·  PESQUISA', cx, 140)
+    ctx.letterSpacing = '0px'
+
+    // ── Decorative line under header ──
+    const lineW = 120
+    ctx.strokeStyle = '#c0392b'
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    ctx.moveTo(cx - lineW, 165)
+    ctx.lineTo(cx + lineW, 165)
     ctx.stroke()
 
-    // Activity
-    ctx.font = '17px "Helvetica Neue", Arial, sans-serif'
-    ctx.fillStyle = '#333333'
-    ctx.fillText('participou da atividade', cx, bodyY + h * 0.115)
+    // Small diamond at center
+    ctx.fillStyle = '#c0392b'
+    ctx.save()
+    ctx.translate(cx, 165)
+    ctx.rotate(Math.PI / 4)
+    ctx.fillRect(-4, -4, 8, 8)
+    ctx.restore()
 
-    ctx.font = 'bold 24px Georgia, serif'
-    ctx.fillStyle = '#1A1A1A'
-    ctx.fillText(`\u201C${data.atividade}\u201D`, cx, bodyY + h * 0.155)
+    // ── CERTIFICADO title ──
+    ctx.font = '300 72px Georgia, "Times New Roman", serif'
+    ctx.fillStyle = '#1a3a3a'
+    ctx.fillText('CERTIFICADO', cx, 260)
 
-    // Details
-    ctx.font = '17px "Helvetica Neue", Arial, sans-serif'
-    ctx.fillStyle = '#333333'
-    ctx.fillText('promovida pela Associação Allos, com carga horária de', cx, bodyY + h * 0.2)
+    ctx.font = '400 22px "Helvetica Neue", Arial, sans-serif'
+    ctx.fillStyle = '#888888'
+    ctx.letterSpacing = '6px'
+    ctx.fillText(`DE ${tipo.toUpperCase()}`, cx, 295)
+    ctx.letterSpacing = '0px'
 
-    ctx.font = 'bold 20px Georgia, serif'
-    ctx.fillStyle = '#1A1A1A'
-    ctx.fillText('2 (duas) horas', cx, bodyY + h * 0.235)
+    // ── "Certificamos que" ──
+    ctx.font = '300 22px "Helvetica Neue", Arial, sans-serif'
+    ctx.fillStyle = '#666666'
+    ctx.fillText('Certificamos que', cx, 370)
 
-    // Date
-    ctx.font = '17px "Helvetica Neue", Arial, sans-serif'
-    ctx.fillStyle = '#333333'
-    ctx.fillText(`realizada em ${formatDatePtBR(data.data)}.`, cx, bodyY + h * 0.275)
+    // ── Participant name ──
+    ctx.font = 'italic 700 52px Georgia, "Times New Roman", serif'
+    ctx.fillStyle = '#c0392b'
+    ctx.fillText(name, cx, 440)
 
-    // Belo Horizonte
-    ctx.font = 'italic 15px Georgia, serif'
-    ctx.fillStyle = '#5C5C5C'
-    ctx.fillText(`Belo Horizonte, ${formatDatePtBR(data.data)}`, cx, bodyY + h * 0.32)
+    // Underline accent for name
+    const nw = ctx.measureText(name).width
+    const nlGrad = ctx.createLinearGradient(cx - nw / 2 - 10, 452, cx + nw / 2 + 10, 452)
+    nlGrad.addColorStop(0, 'transparent')
+    nlGrad.addColorStop(0.15, 'rgba(192,57,43,0.25)')
+    nlGrad.addColorStop(0.85, 'rgba(192,57,43,0.25)')
+    nlGrad.addColorStop(1, 'transparent')
+    ctx.fillStyle = nlGrad
+    ctx.fillRect(cx - nw / 2 - 20, 448, nw + 40, 5)
 
-    // Signature area is already in the template image - no need to draw it!
+    // ── Body text ──
+    let bodyLines: string[]
+    switch (tipo) {
+      case 'conclusão':
+        bodyLines = [
+          `concluiu a formação em \u201C${data.atividade}\u201D,`,
+          `promovida pela Associação Allos, com carga horária total de ${ch} (${chExt}) horas,`,
+          `no período encerrado em ${dateStr}.`,
+        ]
+        break
+      case 'supervisão':
+        bodyLines = [
+          `realizou supervisão clínica na modalidade \u201C${data.atividade}\u201D,`,
+          `promovida pela Associação Allos, com carga horária de ${ch} (${chExt}) horas,`,
+          `em ${dateStr}.`,
+        ]
+        break
+      case 'palestra':
+        bodyLines = [
+          `participou da palestra \u201C${data.atividade}\u201D,`,
+          `promovida pela Associação Allos, com duração de ${ch} (${chExt}) horas,`,
+          `realizada em ${dateStr}.`,
+        ]
+        break
+      case 'organização':
+        bodyLines = [
+          `atuou na organização da atividade \u201C${data.atividade}\u201D,`,
+          `promovida pela Associação Allos,`,
+          `realizada em ${dateStr}.`,
+        ]
+        break
+      default:
+        bodyLines = [
+          `participou da atividade \u201C${data.atividade}\u201D,`,
+          `promovida pela Associação Allos, com carga horária de ${ch} (${chExt}) horas,`,
+          `realizada em ${dateStr}.`,
+        ]
+    }
 
-  }, [data, templateLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
+    ctx.font = '300 20px "Helvetica Neue", Arial, sans-serif'
+    ctx.fillStyle = '#444444'
+    bodyLines.forEach((line, i) => {
+      ctx.fillText(line, cx, 500 + i * 34)
+    })
+
+    // ── Location line ──
+    const locY = 500 + bodyLines.length * 34 + 30
+    ctx.font = 'italic 18px Georgia, "Times New Roman", serif'
+    ctx.fillStyle = '#999999'
+    ctx.fillText(`Belo Horizonte, ${dateStr}`, cx, locY)
+
+    // ── Signature image ──
+    if (signatureImg) {
+      const iw = signatureImg.naturalWidth
+      const ih = signatureImg.naturalHeight
+      // Crop the signature block from the image
+      const sx = Math.round(iw * 0.36)
+      const sy = Math.round(ih * 0.58)
+      const sw = Math.round(iw * 0.40)
+      const sh = Math.round(ih * 0.38)
+
+      const sigDrawW = w * 0.30
+      const sigDrawH = sigDrawW * (sh / sw)
+      const sigX = cx - sigDrawW / 2
+      const sigY = h - 55 - sigDrawH
+
+      ctx.drawImage(signatureImg, sx, sy, sw, sh, sigX, sigY, sigDrawW, sigDrawH)
+    }
+
+  }, [data, signatureImg])
 
   useEffect(() => {
-    if (!templateLoaded) return
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Match template resolution
-    const tpl = templateRef.current
-    if (!tpl) return
-    const w = tpl.naturalWidth
-    const h = tpl.naturalHeight
+    const w = 1684
+    const h = 1190
     canvas.width = w
     canvas.height = h
 
     drawCertificate(ctx, w, h)
     onReady?.()
-  }, [data, drawCertificate, onReady, templateLoaded])
+  }, [data, drawCertificate, onReady])
 
   const handleDownload = () => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    const displayName = data.nomeParticipante
-
-    // Create landscape PDF
     const pdf = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
@@ -171,12 +237,12 @@ export default function CertificateGenerator({ data, onReady }: CertificateGener
 
     const imgData = canvas.toDataURL('image/png', 1.0)
     pdf.addImage(imgData, 'PNG', 0, 0, pdfW, pdfH)
-    pdf.save(`Certificado_Allos_${displayName.replace(/\s+/g, '_')}.pdf`)
+    pdf.save(`Certificado_Allos_${data.nomeParticipante.replace(/\s+/g, '_')}.pdf`)
   }
 
   return (
     <div className="space-y-6">
-      <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+      <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
         <canvas
           ref={canvasRef}
           className="w-full h-auto"
@@ -185,36 +251,16 @@ export default function CertificateGenerator({ data, onReady }: CertificateGener
       </div>
       <button
         onClick={handleDownload}
-        className="w-full font-dm font-bold text-sm py-4 rounded-xl transition-all duration-300 hover:-translate-y-0.5"
+        className="w-full font-dm font-bold text-sm py-4 rounded-xl transition-all duration-300 hover:-translate-y-0.5 inline-flex items-center justify-center gap-2"
         style={{
           backgroundColor: '#C84B31',
           color: '#FFFFFF',
           boxShadow: '0 4px 20px rgba(200,75,49,0.35)',
         }}
       >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Baixar Certificado (PDF)
       </button>
     </div>
   )
-}
-
-function drawAllosIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
-  ctx.strokeStyle = '#2E9E8F'
-
-  ctx.setLineDash([6, 4])
-  ctx.lineWidth = 1
-  ctx.beginPath()
-  ctx.arc(cx, cy, r, 0, Math.PI * 2)
-  ctx.stroke()
-
-  ctx.setLineDash([])
-  ctx.lineWidth = 1.2
-  ctx.beginPath()
-  ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2)
-  ctx.stroke()
-
-  ctx.fillStyle = '#2E9E8F'
-  ctx.beginPath()
-  ctx.arc(cx, cy, r * 0.15, 0, Math.PI * 2)
-  ctx.fill()
 }

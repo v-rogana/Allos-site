@@ -86,6 +86,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true })
   }
 
+  // ─── Import submission (from Google Forms CSV) ─────────────
+  if (action === 'import_submission') {
+    const { nome_completo, email, atividade_nome, nota_grupo, nota_condutor, condutores, relato } = body
+    if (!nome_completo && !email) return NextResponse.json({ error: 'nome or email required' }, { status: 400 })
+    const { data, error } = await sb().from('certificado_submissions').insert({
+      nome_completo: nome_completo || '',
+      email: email || '',
+      atividade_nome: atividade_nome || 'Importado',
+      nota_grupo: nota_grupo || 0,
+      nota_condutor: nota_condutor || 0,
+      condutores: condutores || [],
+      relato: relato || null,
+      certificado_gerado: false,
+    }).select().single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data)
+  }
+
   // ─── Submissions bulk delete ────────────────────────────────
   if (action === 'delete_submissions') {
     const { ids } = body
@@ -93,6 +111,41 @@ export async function POST(req: NextRequest) {
     const { error } = await sb().from('certificado_submissions').delete().in('id', ids)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ success: true, deleted: ids.length })
+  }
+
+  // ─── Sync condutores from submissions ───────────────────────
+  if (action === 'sync_condutores') {
+    const { data: subs } = await sb().from('certificado_submissions').select('condutores')
+    const { data: existing } = await sb().from('certificado_condutores').select('nome')
+    const existingNames = new Set((existing || []).map((c: { nome: string }) => c.nome.toLowerCase()))
+    const allNames = new Set<string>()
+    ;(subs || []).forEach((s: { condutores: string[] | null }) => {
+      ;(s.condutores || []).forEach(c => { if (c.trim()) allNames.add(c.trim()) })
+    })
+    const missing = Array.from(allNames).filter(n => !existingNames.has(n.toLowerCase()))
+    if (missing.length > 0) {
+      const { error } = await sb().from('certificado_condutores').insert(missing.map(nome => ({ nome })))
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    return NextResponse.json({ success: true, added: missing.length, names: missing })
+  }
+
+  // ─── Sync atividades from submissions ─────────────────────
+  if (action === 'sync_atividades') {
+    const { data: subs } = await sb().from('certificado_submissions').select('atividade_nome')
+    const { data: existing } = await sb().from('certificado_atividades').select('nome')
+    const existingNames = new Set((existing || []).map((a: { nome: string }) => a.nome.toLowerCase()))
+    const allNames = new Set<string>()
+    ;(subs || []).forEach((s: { atividade_nome: string }) => {
+      if (s.atividade_nome?.trim()) allNames.add(s.atividade_nome.trim())
+    })
+    const missing = Array.from(allNames).filter(n => !existingNames.has(n.toLowerCase()))
+    if (missing.length > 0) {
+      // Import with ativo=false so admin must explicitly publish
+      const { error } = await sb().from('certificado_atividades').insert(missing.map(nome => ({ nome, ativo: false })))
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    return NextResponse.json({ success: true, added: missing.length, names: missing })
   }
 
   return NextResponse.json({ error: 'unknown action' }, { status: 400 })

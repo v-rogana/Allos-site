@@ -250,6 +250,16 @@ ${a.observacoes ? `
   <a href="${o}/avaliallos" target="_blank" style="display:inline-block;padding:16px 40px;border-radius:999px;background:#C84B31;color:#fff;font-family:'DM Sans';font-size:15px;font-weight:700;text-decoration:none;box-shadow:0 8px 28px rgba(200,75,49,0.25)">Agendar nova avaliação →</a>
 </div>
 
+<!-- CERTIFICADO -->
+<div style="text-align:center;padding:40px 24px;border-radius:22px;background:linear-gradient(135deg,rgba(14,165,160,0.03),rgba(14,165,160,0.008));border:1px solid rgba(14,165,160,0.08);margin-bottom:44px">
+  <div style="width:48px;height:48px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;background:rgba(14,165,160,0.08);border:1px solid rgba(14,165,160,0.15)">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0EA5A0" stroke-width="1.5" stroke-linecap="round"><path d="M12 15l-2 5l2-1l2 1l-2-5"/><circle cx="12" cy="9" r="6"/></svg>
+  </div>
+  <h3 style="font-family:'Fraunces',serif;font-size:20px;color:rgba(253,251,247,0.9);margin-bottom:8px">Participou da <em style="color:#0EA5A0;font-style:italic">Formação Base</em>?</h3>
+  <p style="font-size:13px;color:rgba(253,251,247,0.3);margin-bottom:20px;max-width:380px;margin-left:auto;margin-right:auto;line-height:1.7">Gere seu certificado de participação e deixe seu feedback sobre a experiência.</p>
+  <a href="${o}/certificado" target="_blank" style="display:inline-block;padding:14px 36px;border-radius:999px;background:linear-gradient(135deg,#0EA5A0,#1BBAB0);color:#fff;font-family:'DM Sans';font-size:14px;font-weight:700;text-decoration:none;box-shadow:0 6px 24px rgba(14,165,160,0.25)">Gerar certificado →</a>
+</div>
+
 <!-- FOOTER -->
 <div style="text-align:center;padding:36px 0;border-top:1px solid rgba(253,251,247,0.03)">
   <p style="font-size:11.5px;color:rgba(253,251,247,0.15);font-style:italic;margin-bottom:8px">Acreditamos no seu potencial e esperamos vê-lo de volta em breve!</p>

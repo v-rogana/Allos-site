@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Clock, Plus, Trash2, Eye, EyeOff, X, AlertTriangle,
   RefreshCw, Image as ImageIcon, Download, ChevronDown,
-  CheckCircle2, XCircle, MinusCircle, Calendar
+  CheckCircle2, XCircle, MinusCircle, Calendar, Copy, Check, MessageCircle, Send, Edit3
 } from 'lucide-react'
 
 const DIAS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'] as const
@@ -30,8 +30,12 @@ interface Alocacao {
 }
 interface Condutor { id: string; nome: string; ativo: boolean; telefone: string | null }
 interface Atividade { id: string; nome: string; ativo: boolean }
+interface Evento {
+  id: string; titulo: string; descricao: string | null
+  data_inicio: string; data_fim: string; ativo: boolean; created_at: string
+}
 
-type SubTab = 'calendario' | 'horarios' | 'cronograma'
+type SubTab = 'calendario' | 'horarios' | 'cronograma' | 'whatsapp' | 'eventos'
 
 interface FormacaoBaseProps {
   atividades?: Atividade[]
@@ -43,6 +47,7 @@ export default function FormacaoBase({ atividades = [] }: FormacaoBaseProps) {
   const [slots, setSlots] = useState<Slot[]>([])
   const [alocacoes, setAlocacoes] = useState<Alocacao[]>([])
   const [condutores, setCondutores] = useState<Condutor[]>([])
+  const [eventos, setEventos] = useState<Evento[]>([])
   const [loading, setLoading] = useState(true)
 
   const [newHora, setNewHora] = useState('')
@@ -69,16 +74,18 @@ export default function FormacaoBase({ atividades = [] }: FormacaoBaseProps) {
 
   const loadData = useCallback(async () => {
     setLoading(true)
-    const [hRes, sRes, aRes, cRes] = await Promise.all([
+    const [hRes, sRes, aRes, cRes, eRes] = await Promise.all([
       fetch('/api/certificados/formacao?type=horarios').then(r => r.json()),
       fetch('/api/certificados/formacao?type=slots').then(r => r.json()),
       fetch('/api/certificados/formacao?type=alocacoes').then(r => r.json()),
       fetch('/api/certificados/formacao?type=condutores').then(r => r.json()),
+      fetch('/api/certificados/formacao?type=eventos').then(r => r.json()),
     ])
     if (Array.isArray(hRes)) setHorarios(hRes)
     if (Array.isArray(sRes)) setSlots(sRes)
     if (Array.isArray(aRes)) setAlocacoes(aRes)
     if (Array.isArray(cRes)) setCondutores(cRes)
+    if (Array.isArray(eRes)) setEventos(eRes)
     setLoading(false)
   }, [])
 
@@ -465,6 +472,8 @@ export default function FormacaoBase({ atividades = [] }: FormacaoBaseProps) {
           { key: 'calendario', label: 'Calendário', icon: <Calendar size={14} /> },
           { key: 'horarios', label: 'Horários', icon: <Clock size={14} /> },
           { key: 'cronograma', label: 'Cronograma', icon: <ImageIcon size={14} /> },
+          { key: 'whatsapp', label: 'WhatsApp', icon: <Send size={14} /> },
+          { key: 'eventos', label: 'Eventos', icon: <Calendar size={14} /> },
         ] as { key: SubTab; label: string; icon: React.ReactNode }[]).map(t => (
           <button key={t.key} onClick={() => setSubTab(t.key)}
             className="font-dm text-xs px-4 py-2 rounded-full flex items-center gap-1.5 transition-all"
@@ -703,6 +712,20 @@ export default function FormacaoBase({ atividades = [] }: FormacaoBaseProps) {
             </Card>
           </motion.div>
         )}
+
+        {/* ─── WhatsApp ──────────────────────────────────────── */}
+        {subTab === 'whatsapp' && (
+          <motion.div key="whatsapp" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <WhatsAppPanel cronogramaData={cronogramaData} showToast={showToast} />
+          </motion.div>
+        )}
+
+        {/* ─── Eventos ───────────────────────────────────────── */}
+        {subTab === 'eventos' && (
+          <motion.div key="eventos" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <EventosPanel eventos={eventos} api={api} loadData={loadData} showToast={showToast} />
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   )
@@ -775,6 +798,384 @@ function EmptyBox({ icon, message, hint }: { icon: React.ReactNode; message: str
       <span style={{ color: 'rgba(253,251,247,0.08)' }}>{icon}</span>
       <p className="font-dm text-sm" style={{ color: 'rgba(253,251,247,0.3)' }}>{message}</p>
       {hint && <p className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.15)' }}>{hint}</p>}
+    </div>
+  )
+}
+
+// ─── Eventos Panel ──────────────────────────────────────────────
+
+function EventosPanel({ eventos, api, loadData, showToast }: {
+  eventos: Evento[]
+  api: (body: Record<string, unknown>) => Promise<unknown>
+  loadData: () => Promise<void>
+  showToast: (msg: string) => void
+}) {
+  const [showForm, setShowForm] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [titulo, setTitulo] = useState('')
+  const [descricao, setDescricao] = useState('')
+  const [dataInicio, setDataInicio] = useState('')
+  const [dataFim, setDataFim] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+
+  function resetForm() {
+    setTitulo(''); setDescricao(''); setDataInicio(''); setDataFim('')
+    setEditId(null); setShowForm(false)
+  }
+
+  function openEdit(ev: Evento) {
+    setEditId(ev.id)
+    setTitulo(ev.titulo)
+    setDescricao(ev.descricao || '')
+    setDataInicio(ev.data_inicio.slice(0, 16))
+    setDataFim(ev.data_fim.slice(0, 16))
+    setShowForm(true)
+  }
+
+  async function handleSave() {
+    if (!titulo.trim() || !dataInicio || !dataFim) return
+    setSaving(true)
+    if (editId) {
+      await api({ action: 'update_evento', id: editId, titulo: titulo.trim(), descricao: descricao.trim(), data_inicio: dataInicio, data_fim: dataFim })
+      showToast('Evento atualizado')
+    } else {
+      await api({ action: 'create_evento', titulo: titulo.trim(), descricao: descricao.trim(), data_inicio: dataInicio, data_fim: dataFim })
+      showToast('Evento criado')
+    }
+    setSaving(false)
+    resetForm()
+    loadData()
+  }
+
+  async function handleToggle(ev: Evento) {
+    await api({ action: 'update_evento', id: ev.id, ativo: !ev.ativo })
+    loadData()
+    showToast(ev.ativo ? 'Evento desativado' : 'Evento ativado')
+  }
+
+  async function handleDelete(id: string) {
+    await api({ action: 'delete_evento', id })
+    setConfirmDelete(null)
+    loadData()
+    showToast('Evento excluído')
+  }
+
+  function getStatus(ev: Evento): { label: string; color: string; bg: string } {
+    if (!ev.ativo) return { label: 'Desativado', color: 'rgba(253,251,247,0.3)', bg: 'rgba(255,255,255,0.03)' }
+    const now = new Date()
+    const inicio = new Date(ev.data_inicio)
+    const fim = new Date(ev.data_fim)
+    if (now < inicio) return { label: 'Agendado', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)' }
+    if (now > fim) return { label: 'Encerrado', color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' }
+    return { label: 'Ao vivo', color: '#22c55e', bg: 'rgba(34,197,94,0.1)' }
+  }
+
+  function formatDt(iso: string) {
+    const d = new Date(iso)
+    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Header + add button */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Calendar size={16} style={{ color: '#C84B31' }} />
+          <h3 className="font-dm text-sm font-medium" style={{ color: 'rgba(253,251,247,0.6)' }}>
+            Eventos Temporários de Certificação
+          </h3>
+        </div>
+        <button onClick={() => { resetForm(); setShowForm(true) }}
+          className="font-dm text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5"
+          style={{ backgroundColor: '#C84B31', color: '#fff' }}>
+          <Plus size={14} /> Novo Evento
+        </button>
+      </div>
+
+      {/* Info */}
+      <div className="rounded-xl p-3" style={{ backgroundColor: 'rgba(200,75,49,0.05)', border: '1px solid rgba(200,75,49,0.12)' }}>
+        <p className="font-dm text-xs leading-relaxed" style={{ color: 'rgba(253,251,247,0.4)' }}>
+          Eventos aparecem automaticamente no formulário de certificado (<code style={{ color: '#C84B31' }}>/certificado</code>) enquanto
+          estiverem ativos e dentro do período definido. Após o horário final, desaparecem automaticamente.
+        </p>
+      </div>
+
+      {/* Create/Edit form */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+            className="rounded-xl p-5 space-y-4"
+            style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="flex items-center justify-between">
+              <h4 className="font-dm text-sm font-medium" style={{ color: 'rgba(253,251,247,0.7)' }}>
+                {editId ? 'Editar Evento' : 'Novo Evento'}
+              </h4>
+              <button onClick={resetForm} className="p-1 rounded" style={{ color: 'rgba(253,251,247,0.3)' }}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="font-dm text-[11px] font-medium block mb-1" style={{ color: 'rgba(253,251,247,0.4)' }}>Título *</label>
+                <input value={titulo} onChange={e => setTitulo(e.target.value)}
+                  placeholder="Ex: Workshop de Escuta Clínica"
+                  className="font-dm w-full px-3 py-2.5 rounded-lg text-sm outline-none"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }} />
+              </div>
+
+              <div>
+                <label className="font-dm text-[11px] font-medium block mb-1" style={{ color: 'rgba(253,251,247,0.4)' }}>Descrição</label>
+                <input value={descricao} onChange={e => setDescricao(e.target.value)}
+                  placeholder="Breve descrição do evento"
+                  className="font-dm w-full px-3 py-2.5 rounded-lg text-sm outline-none"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-dm text-[11px] font-medium block mb-1" style={{ color: 'rgba(253,251,247,0.4)' }}>Início *</label>
+                  <input type="datetime-local" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+                    className="font-dm w-full px-3 py-2.5 rounded-lg text-sm outline-none"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)', colorScheme: 'dark' }} />
+                </div>
+                <div>
+                  <label className="font-dm text-[11px] font-medium block mb-1" style={{ color: 'rgba(253,251,247,0.4)' }}>Término *</label>
+                  <input type="datetime-local" value={dataFim} onChange={e => setDataFim(e.target.value)}
+                    className="font-dm w-full px-3 py-2.5 rounded-lg text-sm outline-none"
+                    style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)', colorScheme: 'dark' }} />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={resetForm} className="font-dm text-xs px-4 py-2 rounded-lg"
+                style={{ color: 'rgba(253,251,247,0.4)', backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                Cancelar
+              </button>
+              <button onClick={handleSave} disabled={saving || !titulo.trim() || !dataInicio || !dataFim}
+                className="font-dm text-xs font-bold px-5 py-2 rounded-lg flex items-center gap-1.5"
+                style={{
+                  backgroundColor: titulo.trim() && dataInicio && dataFim ? '#C84B31' : 'rgba(255,255,255,0.06)',
+                  color: titulo.trim() && dataInicio && dataFim ? '#fff' : 'rgba(253,251,247,0.2)',
+                }}>
+                {saving && <RefreshCw size={12} className="animate-spin" />}
+                {editId ? 'Salvar' : 'Criar'}
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Events list */}
+      {eventos.length === 0 ? (
+        <EmptyBox icon={<Calendar size={36} />} message="Nenhum evento criado" hint="Crie eventos temporários para aparecerem no formulário de certificado" />
+      ) : (
+        <div className="space-y-2">
+          {eventos.map(ev => {
+            const st = getStatus(ev)
+            return (
+              <div key={ev.id} className="rounded-xl p-4"
+                style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-dm text-xs font-bold px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: st.bg, color: st.color }}>
+                        {st.label}
+                      </span>
+                      <h4 className="font-dm text-sm font-medium truncate" style={{ color: 'rgba(253,251,247,0.8)' }}>
+                        {ev.titulo}
+                      </h4>
+                    </div>
+                    {ev.descricao && (
+                      <p className="font-dm text-xs mb-1.5" style={{ color: 'rgba(253,251,247,0.35)' }}>{ev.descricao}</p>
+                    )}
+                    <p className="font-dm text-[11px]" style={{ color: 'rgba(253,251,247,0.25)' }}>
+                      {formatDt(ev.data_inicio)} — {formatDt(ev.data_fim)}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => openEdit(ev)} className="p-1.5 rounded-lg transition-all hover:bg-white/[0.04]"
+                      style={{ color: 'rgba(253,251,247,0.3)' }} title="Editar">
+                      <Edit3 size={14} />
+                    </button>
+                    <button onClick={() => handleToggle(ev)} className="p-1.5 rounded-lg transition-all hover:bg-white/[0.04]"
+                      style={{ color: ev.ativo ? '#C84B31' : 'rgba(253,251,247,0.2)' }} title={ev.ativo ? 'Desativar' : 'Ativar'}>
+                      {ev.ativo ? <Eye size={14} /> : <EyeOff size={14} />}
+                    </button>
+                    {confirmDelete === ev.id ? (
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleDelete(ev.id)} className="p-1.5 rounded-lg"
+                          style={{ color: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)' }} title="Confirmar">
+                          <Check size={14} />
+                        </button>
+                        <button onClick={() => setConfirmDelete(null)} className="p-1.5 rounded-lg"
+                          style={{ color: 'rgba(253,251,247,0.3)' }} title="Cancelar">
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirmDelete(ev.id)} className="p-1.5 rounded-lg transition-all hover:bg-red-500/10"
+                        style={{ color: 'rgba(253,251,247,0.2)' }} title="Excluir">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── WhatsApp Panel ──────────────────────────────────────────────
+
+const WHATSAPP_GROUPS = [
+  { name: 'Grupo Allos I', url: 'https://chat.whatsapp.com/JpZtYWJovU03VlrZJ5oUxQ' },
+  { name: 'Grupo Allos II', url: 'https://chat.whatsapp.com/KP2z0vFRaSVBSXRjIyvR3R' },
+]
+
+function buildWhatsAppTemplate(cronogramaData: { dia: string; items: string[] }[]): string {
+  let msg = `📋 *Cronograma da Semana — Formação Allos*\n\n`
+
+  if (cronogramaData.length > 0) {
+    cronogramaData.forEach(d => {
+      msg += `📅 *${d.dia}*\n`
+      d.items.forEach(item => { msg += `    • ${item}\n` })
+      msg += '\n'
+    })
+  } else {
+    msg += `📅 *Segunda*\n    • 19h30: Grupo de Estudo\n\n`
+    msg += `📅 *Terça*\n    • 19h30: Supervisão Clínica\n\n`
+    msg += `📅 *Quarta*\n    • 19h30: Grupo Aberto\n\n`
+    msg += `📅 *Quinta*\n    • 19h30: Grupo de Estudo\n\n`
+    msg += `📅 *Sexta*\n    • 19h30: Supervisão Clínica\n\n`
+  }
+
+  msg += `---\n`
+  msg += `✅ Todos os grupos são *abertos e gratuitos*\n`
+  msg += `🎓 Participação garante *certificado*\n`
+  msg += `🧠 Te prepara para ser um *excelente clínico*\n\n`
+  msg += `🔗 Entre no grupo: https://chat.whatsapp.com/JpZtYWJovU03VlrZJ5oUxQ`
+
+  return msg
+}
+
+function WhatsAppPanel({ cronogramaData, showToast }: { cronogramaData: { dia: string; items: string[] }[]; showToast: (msg: string) => void }) {
+  const [mensagem, setMensagem] = useState(() => buildWhatsAppTemplate(cronogramaData))
+  const [copied, setCopied] = useState(false)
+
+  // Regenerate when cronograma changes
+  useEffect(() => {
+    setMensagem(buildWhatsAppTemplate(cronogramaData))
+  }, [cronogramaData])
+
+  function handleCopy() {
+    navigator.clipboard.writeText(mensagem).then(() => {
+      setCopied(true)
+      showToast('Mensagem copiada!')
+      setTimeout(() => setCopied(false), 2500)
+    })
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Info banner */}
+      <div className="rounded-xl p-4 flex items-start gap-3"
+        style={{ backgroundColor: 'rgba(37,211,102,0.06)', border: '1px solid rgba(37,211,102,0.15)' }}>
+        <MessageCircle size={18} className="flex-shrink-0 mt-0.5" style={{ color: '#25D366' }} />
+        <div>
+          <p className="font-dm text-sm font-medium mb-1" style={{ color: 'rgba(253,251,247,0.8)' }}>
+            Divulgue o cronograma nos grupos do WhatsApp
+          </p>
+          <p className="font-dm text-xs leading-relaxed" style={{ color: 'rgba(253,251,247,0.4)' }}>
+            A mensagem é gerada automaticamente a partir do calendário. Edite se quiser, copie e envie nos grupos.
+            Todos os grupos do cronograma são <strong style={{ color: 'rgba(253,251,247,0.65)' }}>abertos, gratuitos, garantem certificado</strong> e
+            preparam para ser um <strong style={{ color: '#25D366' }}>excelente clínico</strong>.
+          </p>
+        </div>
+      </div>
+
+      {/* Highlights */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {[
+          { emoji: '🆓', label: 'Gratuito' },
+          { emoji: '🔓', label: 'Aberto a todos' },
+          { emoji: '🎓', label: 'Com certificado' },
+          { emoji: '🧠', label: 'Formação clínica' },
+        ].map(item => (
+          <div key={item.label}
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+            style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <span className="text-base">{item.emoji}</span>
+            <span className="font-dm font-medium text-[11px]" style={{ color: 'rgba(253,251,247,0.5)' }}>{item.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Textarea card */}
+      <div className="rounded-xl overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        {/* Toolbar */}
+        <div className="flex items-center justify-between px-4 py-2.5"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+          <div className="flex items-center gap-2">
+            <MessageCircle size={13} style={{ color: '#25D366' }} />
+            <span className="font-dm font-semibold text-[11px]" style={{ color: 'rgba(253,251,247,0.4)' }}>
+              Modelo de mensagem
+            </span>
+          </div>
+          <button onClick={handleCopy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-dm font-semibold text-[11px] transition-all duration-200"
+            style={{
+              background: copied ? 'rgba(37,211,102,0.15)' : 'rgba(253,251,247,0.04)',
+              color: copied ? '#25D366' : 'rgba(253,251,247,0.45)',
+              border: `1px solid ${copied ? 'rgba(37,211,102,0.3)' : 'rgba(255,255,255,0.06)'}`,
+            }}>
+            {copied ? <Check size={11} /> : <Copy size={11} />}
+            {copied ? 'Copiado!' : 'Copiar'}
+          </button>
+        </div>
+
+        <textarea
+          value={mensagem}
+          onChange={e => setMensagem(e.target.value)}
+          rows={16}
+          className="w-full px-4 py-3 font-dm text-sm outline-none resize-none"
+          style={{ background: 'transparent', color: 'rgba(253,251,247,0.75)', lineHeight: 1.7 }}
+        />
+      </div>
+
+      {/* WhatsApp group buttons */}
+      <div className="space-y-2">
+        <p className="font-dm text-[11px] text-center" style={{ color: 'rgba(253,251,247,0.25)' }}>
+          Copie a mensagem e envie nos grupos
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {WHATSAPP_GROUPS.map(group => (
+            <a key={group.name}
+              href={group.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => { navigator.clipboard.writeText(mensagem).catch(() => {}) }}
+              className="flex items-center justify-center gap-2.5 px-5 py-3.5 rounded-xl font-dm font-bold text-sm transition-all duration-300 hover:-translate-y-0.5"
+              style={{ background: '#25D366', color: '#FFFFFF', boxShadow: '0 4px 20px rgba(37,211,102,0.3)' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+              </svg>
+              {group.name}
+            </a>
+          ))}
+        </div>
+        <p className="font-dm text-[10px] text-center pt-1" style={{ color: 'rgba(253,251,247,0.15)' }}>
+          A mensagem é copiada automaticamente ao clicar no grupo
+        </p>
+      </div>
     </div>
   )
 }

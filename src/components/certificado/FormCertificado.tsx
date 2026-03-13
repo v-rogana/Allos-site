@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronRight, ChevronLeft, Send, Download, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Send, Download, AlertCircle, CheckCircle2, Sparkles } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import StarRating from './StarRating'
 import CertificateGenerator from './CertificateGenerator'
@@ -17,12 +17,21 @@ interface Condutor {
   nome: string
 }
 
+interface Evento {
+  id: string
+  titulo: string
+  descricao: string | null
+  data_inicio: string
+  data_fim: string
+}
+
 type Step = 'identificacao' | 'atividade' | 'feedback' | 'sucesso'
 
 export default function FormCertificado() {
   // Data from Supabase
   const [atividades, setAtividades] = useState<Atividade[]>([])
   const [condutores, setCondutores] = useState<Condutor[]>([])
+  const [eventos, setEventos] = useState<Evento[]>([])
 
   // Form state
   const [step, setStep] = useState<Step>('identificacao')
@@ -30,6 +39,7 @@ export default function FormCertificado() {
   const [nomeSocial, setNomeSocial] = useState('')
   const [email, setEmail] = useState('')
   const [atividadeSelecionada, setAtividadeSelecionada] = useState('')
+  const [isEvento, setIsEvento] = useState(false)
   const [notaGrupo, setNotaGrupo] = useState(0)
   const [condutoresSelecionados, setCondutoresSelecionados] = useState<string[]>([])
   const [notaCondutor, setNotaCondutor] = useState(0)
@@ -45,12 +55,14 @@ export default function FormCertificado() {
   }, [])
 
   async function loadData() {
-    const [atRes, coRes] = await Promise.all([
+    const [atRes, coRes, evRes] = await Promise.all([
       supabase.from('certificado_atividades').select('*').eq('ativo', true).order('nome'),
       supabase.from('certificado_condutores').select('*').eq('ativo', true).order('nome'),
+      fetch('/api/certificados/formacao?type=eventos_ativos').then(r => r.json()),
     ])
     if (atRes.data) setAtividades(atRes.data)
     if (coRes.data) setCondutores(coRes.data)
+    if (Array.isArray(evRes)) setEventos(evRes)
   }
 
   function toggleCondutor(nome: string) {
@@ -68,6 +80,7 @@ export default function FormCertificado() {
       case 'atividade':
         return atividadeSelecionada.length > 0
       case 'feedback':
+        if (isEvento) return true // Feedback is optional for events
         return notaGrupo > 0 && condutoresSelecionados.length > 0 && notaCondutor > 0
       default:
         return false
@@ -103,9 +116,9 @@ export default function FormCertificado() {
           nome_social: nomeSocial.trim() || null,
           email: email.trim().toLowerCase(),
           atividade_nome: atividadeSelecionada,
-          nota_grupo: notaGrupo,
-          condutores: condutoresSelecionados,
-          nota_condutor: notaCondutor,
+          nota_grupo: isEvento ? (notaGrupo || 5) : notaGrupo,
+          condutores: isEvento ? [] : condutoresSelecionados,
+          nota_condutor: isEvento ? (notaCondutor || 5) : notaCondutor,
           relato: relato.trim() || null,
           certificado_gerado: true,
         })
@@ -242,34 +255,83 @@ export default function FormCertificado() {
                     <p className="font-dm text-sm" style={{ color: 'rgba(253,251,247,0.35)' }}>Selecione a atividade que você participou</p>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3">
-                    {atividades.map((at) => (
-                      <button
-                        key={at.id}
-                        type="button"
-                        onClick={() => setAtividadeSelecionada(at.nome)}
-                        className="text-left px-5 py-4 rounded-xl font-dm text-sm transition-all duration-200"
-                        style={{
-                          backgroundColor: atividadeSelecionada === at.nome ? 'rgba(200,75,49,0.12)' : 'rgba(255,255,255,0.03)',
-                          border: `1.5px solid ${atividadeSelecionada === at.nome ? 'rgba(200,75,49,0.4)' : 'rgba(255,255,255,0.06)'}`,
-                          color: atividadeSelecionada === at.nome ? '#C84B31' : 'rgba(253,251,247,0.7)',
-                        }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                  {/* Active events */}
+                  {eventos.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Sparkles size={14} style={{ color: '#C84B31' }} />
+                        <span className="font-dm text-xs font-bold tracking-wider uppercase" style={{ color: '#C84B31' }}>Eventos</span>
+                      </div>
+                      {eventos.map((ev) => {
+                        const sel = atividadeSelecionada === ev.titulo && isEvento
+                        return (
+                          <button
+                            key={ev.id}
+                            type="button"
+                            onClick={() => { setAtividadeSelecionada(ev.titulo); setIsEvento(true) }}
+                            className="w-full text-left px-5 py-4 rounded-xl font-dm text-sm transition-all duration-200"
                             style={{
-                              borderColor: atividadeSelecionada === at.nome ? '#C84B31' : 'rgba(255,255,255,0.15)',
+                              backgroundColor: sel ? 'rgba(200,75,49,0.12)' : 'rgba(200,75,49,0.04)',
+                              border: `1.5px solid ${sel ? 'rgba(200,75,49,0.4)' : 'rgba(200,75,49,0.12)'}`,
+                              color: sel ? '#C84B31' : 'rgba(253,251,247,0.7)',
                             }}
                           >
-                            {atividadeSelecionada === at.nome && (
-                              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#C84B31' }} />
-                            )}
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                                style={{ borderColor: sel ? '#C84B31' : 'rgba(200,75,49,0.3)' }}
+                              >
+                                {sel && <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#C84B31' }} />}
+                              </div>
+                              <div>
+                                <span className="font-medium">{ev.titulo}</span>
+                                {ev.descricao && (
+                                  <p className="text-xs mt-0.5" style={{ color: 'rgba(253,251,247,0.35)' }}>{ev.descricao}</p>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {/* Regular activities */}
+                  {eventos.length > 0 && atividades.length > 0 && (
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }} />
+                      <span className="font-dm text-[10px] tracking-wider uppercase" style={{ color: 'rgba(253,251,247,0.2)' }}>Atividades regulares</span>
+                      <div className="flex-1 h-px" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }} />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 gap-3">
+                    {atividades.map((at) => {
+                      const sel = atividadeSelecionada === at.nome && !isEvento
+                      return (
+                        <button
+                          key={at.id}
+                          type="button"
+                          onClick={() => { setAtividadeSelecionada(at.nome); setIsEvento(false) }}
+                          className="text-left px-5 py-4 rounded-xl font-dm text-sm transition-all duration-200"
+                          style={{
+                            backgroundColor: sel ? 'rgba(200,75,49,0.12)' : 'rgba(255,255,255,0.03)',
+                            border: `1.5px solid ${sel ? 'rgba(200,75,49,0.4)' : 'rgba(255,255,255,0.06)'}`,
+                            color: sel ? '#C84B31' : 'rgba(253,251,247,0.7)',
+                          }}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                              style={{ borderColor: sel ? '#C84B31' : 'rgba(255,255,255,0.15)' }}
+                            >
+                              {sel && <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#C84B31' }} />}
+                            </div>
+                            {at.nome}
                           </div>
-                          {at.nome}
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      )
+                    })}
                   </div>
                 </motion.div>
               )}
@@ -286,85 +348,126 @@ export default function FormCertificado() {
                   transition={{ duration: 0.3 }}
                   className="space-y-8"
                 >
-                  <div>
-                    <h2 className="font-fraunces font-bold text-xl mb-2" style={{ color: 'rgba(253,251,247,0.9)' }}>Seu Feedback</h2>
-                    <p className="font-dm text-sm leading-relaxed" style={{ color: 'rgba(253,251,247,0.4)' }}>
-                      Seu feedback é muito importante para a construção do aprimoramento contínuo da nossa formação. Ele nos ajuda a melhorar a qualidade dos grupos e oferecer um percurso cada vez mais qualificado para todos os envolvidos.
-                    </p>
-                    <p className="font-dm text-sm leading-relaxed mt-2" style={{ color: 'rgba(253,251,247,0.4)' }}>
-                      Na Alos, todos estamos em constante formação, inclusive quem conduz os grupos.
-                    </p>
-                  </div>
+                  {isEvento ? (
+                    <>
+                      <div>
+                        <h2 className="font-fraunces font-bold text-xl mb-2" style={{ color: 'rgba(253,251,247,0.9)' }}>Feedback (opcional)</h2>
+                        <p className="font-dm text-sm leading-relaxed" style={{ color: 'rgba(253,251,247,0.4)' }}>
+                          Conte-nos como foi sua experiência no evento <strong style={{ color: 'rgba(253,251,247,0.7)' }}>{atividadeSelecionada}</strong>.
+                          Você pode pular este passo clicando em &quot;Enviar&quot;.
+                        </p>
+                      </div>
 
-                  {/* Group rating */}
-                  <div className="space-y-3">
-                    <label className="font-dm text-sm font-medium block" style={{ color: 'rgba(253,251,247,0.7)' }}>
-                      O quanto você gostou do formato do grupo que você participou? *
-                    </label>
-                    <StarRating value={notaGrupo} onChange={setNotaGrupo} />
-                  </div>
+                      <div className="space-y-3">
+                        <label className="font-dm text-sm font-medium block" style={{ color: 'rgba(253,251,247,0.7)' }}>
+                          O que achou do evento?
+                        </label>
+                        <StarRating value={notaGrupo} onChange={setNotaGrupo} />
+                      </div>
 
-                  {/* Conductors */}
-                  <div className="space-y-3">
-                    <label className="font-dm text-sm font-medium block" style={{ color: 'rgba(253,251,247,0.7)' }}>
-                      Quem conduziu o grupo? * <span className="font-normal" style={{ color: 'rgba(253,251,247,0.3)' }}>(selecione até 3)</span>
-                    </label>
-                    <div className="flex flex-wrap gap-2">
-                      {condutores.map((c) => {
-                        const selected = condutoresSelecionados.includes(c.nome)
-                        return (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => toggleCondutor(c.nome)}
-                            className="px-4 py-2 rounded-full font-dm text-sm transition-all duration-200"
-                            style={{
-                              backgroundColor: selected ? 'rgba(200,75,49,0.15)' : 'rgba(255,255,255,0.04)',
-                              border: `1px solid ${selected ? 'rgba(200,75,49,0.4)' : 'rgba(255,255,255,0.08)'}`,
-                              color: selected ? '#C84B31' : 'rgba(253,251,247,0.6)',
-                              opacity: !selected && condutoresSelecionados.length >= 3 ? 0.4 : 1,
-                            }}
-                          >
-                            {c.nome}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
+                      <div className="space-y-3">
+                        <label className="font-dm text-sm font-medium block" style={{ color: 'rgba(253,251,247,0.7)' }}>
+                          Deixe um relato sobre sua experiência
+                        </label>
+                        <textarea
+                          value={relato}
+                          onChange={(e) => setRelato(e.target.value)}
+                          rows={4}
+                          placeholder="Conte-nos como foi sua experiência..."
+                          className="font-dm w-full px-4 py-3 rounded-xl text-sm outline-none transition-all duration-200 resize-none"
+                          style={{
+                            backgroundColor: 'rgba(255,255,255,0.04)',
+                            border: '1.5px solid rgba(255,255,255,0.08)',
+                            color: 'rgba(253,251,247,0.9)',
+                          }}
+                          onFocus={(e) => { e.target.style.borderColor = 'rgba(200,75,49,0.4)' }}
+                          onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.08)' }}
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <h2 className="font-fraunces font-bold text-xl mb-2" style={{ color: 'rgba(253,251,247,0.9)' }}>Seu Feedback</h2>
+                        <p className="font-dm text-sm leading-relaxed" style={{ color: 'rgba(253,251,247,0.4)' }}>
+                          Seu feedback é muito importante para a construção do aprimoramento contínuo da nossa formação. Ele nos ajuda a melhorar a qualidade dos grupos e oferecer um percurso cada vez mais qualificado para todos os envolvidos.
+                        </p>
+                        <p className="font-dm text-sm leading-relaxed mt-2" style={{ color: 'rgba(253,251,247,0.4)' }}>
+                          Na Alos, todos estamos em constante formação, inclusive quem conduz os grupos.
+                        </p>
+                      </div>
 
-                  {/* Conductor rating */}
-                  {condutoresSelecionados.length > 0 && (
-                    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-                      <label className="font-dm text-sm font-medium block" style={{ color: 'rgba(253,251,247,0.7)' }}>
-                        Qual nota você daria para quem conduziu o grupo? *
-                      </label>
-                      <StarRating value={notaCondutor} onChange={setNotaCondutor} />
-                    </motion.div>
+                      {/* Group rating */}
+                      <div className="space-y-3">
+                        <label className="font-dm text-sm font-medium block" style={{ color: 'rgba(253,251,247,0.7)' }}>
+                          O quanto você gostou do formato do grupo que você participou? *
+                        </label>
+                        <StarRating value={notaGrupo} onChange={setNotaGrupo} />
+                      </div>
+
+                      {/* Conductors */}
+                      <div className="space-y-3">
+                        <label className="font-dm text-sm font-medium block" style={{ color: 'rgba(253,251,247,0.7)' }}>
+                          Quem conduziu o grupo? * <span className="font-normal" style={{ color: 'rgba(253,251,247,0.3)' }}>(selecione até 3)</span>
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {condutores.map((c) => {
+                            const selected = condutoresSelecionados.includes(c.nome)
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => toggleCondutor(c.nome)}
+                                className="px-4 py-2 rounded-full font-dm text-sm transition-all duration-200"
+                                style={{
+                                  backgroundColor: selected ? 'rgba(200,75,49,0.15)' : 'rgba(255,255,255,0.04)',
+                                  border: `1px solid ${selected ? 'rgba(200,75,49,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                                  color: selected ? '#C84B31' : 'rgba(253,251,247,0.6)',
+                                  opacity: !selected && condutoresSelecionados.length >= 3 ? 0.4 : 1,
+                                }}
+                              >
+                                {c.nome}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Conductor rating */}
+                      {condutoresSelecionados.length > 0 && (
+                        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+                          <label className="font-dm text-sm font-medium block" style={{ color: 'rgba(253,251,247,0.7)' }}>
+                            Qual nota você daria para quem conduziu o grupo? *
+                          </label>
+                          <StarRating value={notaCondutor} onChange={setNotaCondutor} />
+                        </motion.div>
+                      )}
+
+                      {/* Free text */}
+                      <div className="space-y-3">
+                        <label className="font-dm text-sm font-medium block" style={{ color: 'rgba(253,251,247,0.7)' }}>
+                          Faça um pequeno relato sobre sua experiência
+                        </label>
+                        <p className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.25)' }}>
+                          Sugestões, críticas ou feedbacks. Esta resposta será anônima.
+                        </p>
+                        <textarea
+                          value={relato}
+                          onChange={(e) => setRelato(e.target.value)}
+                          rows={4}
+                          placeholder="Conte-nos como foi sua experiência..."
+                          className="font-dm w-full px-4 py-3 rounded-xl text-sm outline-none transition-all duration-200 resize-none"
+                          style={{
+                            backgroundColor: 'rgba(255,255,255,0.04)',
+                            border: '1.5px solid rgba(255,255,255,0.08)',
+                            color: 'rgba(253,251,247,0.9)',
+                          }}
+                          onFocus={(e) => { e.target.style.borderColor = 'rgba(200,75,49,0.4)' }}
+                          onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.08)' }}
+                        />
+                      </div>
+                    </>
                   )}
-
-                  {/* Free text */}
-                  <div className="space-y-3">
-                    <label className="font-dm text-sm font-medium block" style={{ color: 'rgba(253,251,247,0.7)' }}>
-                      Faça um pequeno relato sobre sua experiência
-                    </label>
-                    <p className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.25)' }}>
-                      Sugestões, críticas ou feedbacks. Esta resposta será anônima.
-                    </p>
-                    <textarea
-                      value={relato}
-                      onChange={(e) => setRelato(e.target.value)}
-                      rows={4}
-                      placeholder="Conte-nos como foi sua experiência..."
-                      className="font-dm w-full px-4 py-3 rounded-xl text-sm outline-none transition-all duration-200 resize-none"
-                      style={{
-                        backgroundColor: 'rgba(255,255,255,0.04)',
-                        border: '1.5px solid rgba(255,255,255,0.08)',
-                        color: 'rgba(253,251,247,0.9)',
-                      }}
-                      onFocus={(e) => { e.target.style.borderColor = 'rgba(200,75,49,0.4)' }}
-                      onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.08)' }}
-                    />
-                  </div>
                 </motion.div>
               )}
 
@@ -404,10 +507,39 @@ export default function FormCertificado() {
                     <CertificateGenerator
                       data={{
                         nomeParticipante: nomeCompleto,
-                        atividade: atividadeSelecionada,
+                        atividade: atividadeSelecionada === 'Avaliallos (Processo avaliativo)'
+                          ? 'Monitoria formativa de psicoterapia'
+                          : atividadeSelecionada,
                         data: new Date().toISOString().split('T')[0],
                       }}
                     />
+                  </div>
+
+                  {/* CTA buttons */}
+                  <div className="space-y-3">
+                    <a
+                      href="https://chat.whatsapp.com/JpZtYWJovU03VlrZJ5oUxQ"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-xl font-dm font-bold text-sm transition-all duration-300 hover:-translate-y-0.5"
+                      style={{ background: '#25D366', color: '#FFFFFF', boxShadow: '0 4px 20px rgba(37,211,102,0.3)' }}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                      </svg>
+                      Entrar no grupo de Formação Aberta
+                    </a>
+
+                    <a
+                      href="/processo-seletivo"
+                      className="w-full flex items-center justify-center gap-3 px-5 py-4 rounded-xl font-dm font-bold text-sm transition-all duration-300 hover:-translate-y-0.5"
+                      style={{ background: 'rgba(200,75,49,0.12)', color: '#C84B31', border: '1px solid rgba(200,75,49,0.3)', boxShadow: '0 4px 20px rgba(200,75,49,0.1)' }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 10v6M2 10l10-5 10 5-10 5z" /><path d="M6 12v5c0 1.1 2.7 3 6 3s6-1.9 6-3v-5" />
+                      </svg>
+                      Conhecer o Processo Seletivo de Estágio e Bolsa
+                    </a>
                   </div>
 
                   {/* Final message */}

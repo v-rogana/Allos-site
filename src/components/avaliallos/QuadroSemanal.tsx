@@ -13,10 +13,11 @@ const T = '#0EA5A0', C = 'rgba(255,255,255,0.025)', B = 'rgba(255,255,255,0.07)'
 const X = 'rgba(253,251,247,0.9)', X2 = 'rgba(253,251,247,0.5)', X3 = 'rgba(253,251,247,0.3)'
 const ST: Record<string, { bg: string; tx: string; lb: string }> = {
   aguardando: { bg: 'rgba(212,133,74,0.12)', tx: '#D4854A', lb: 'Aguardando' },
-  em_confirmacao: { bg: 'rgba(27,186,176,0.12)', tx: '#1BBAB0', lb: 'Em confirmação' },
-  confirmado: { bg: 'rgba(14,165,160,0.12)', tx: '#0EA5A0', lb: 'Confirmado' },
+  em_confirmacao: { bg: 'rgba(234,140,0,0.12)', tx: '#EA8C00', lb: 'Em confirmação' },
+  confirmado: { bg: 'rgba(34,197,94,0.12)', tx: '#22c55e', lb: 'Confirmado' },
   remarcar: { bg: 'rgba(139,92,246,0.12)', tx: '#8B5CF6', lb: 'Remarcar' },
   removido: { bg: 'rgba(92,92,92,0.12)', tx: '#5C5C5C', lb: 'Removido' },
+  avaliacao_realizada: { bg: 'rgba(253,251,247,0.04)', tx: 'rgba(253,251,247,0.35)', lb: 'Avaliação já realizada' },
 }
 
 interface Props { readOnly?: boolean }

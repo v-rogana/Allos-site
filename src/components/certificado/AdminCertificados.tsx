@@ -1,14 +1,16 @@
 'use client'
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   BarChart3, Users, FileText, Star, TrendingUp,
   Plus, Trash2, Eye, EyeOff, ChevronRight,
   Award, MessageSquare, Search, Download, CheckSquare, Square,
-  X, AlertTriangle, RefreshCw, Filter, Check, Edit3, Phone, ChevronDown
+  X, AlertTriangle, RefreshCw, Filter, Check, Edit3, Phone, ChevronDown,
+  Upload
 } from 'lucide-react'
-import CertificateGenerator from './CertificateGenerator'
+const CertificateGenerator = dynamic(() => import('./CertificateGenerator'), { ssr: false })
 import FormacaoBase from './FormacaoBase'
 
 // ─── Types ─────────────────────────────────────────────────────────
@@ -102,6 +104,11 @@ export default function AdminCertificados() {
   // Atividades state
   const [newAtividade, setNewAtividade] = useState('')
 
+  // Import CSV state
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<{ success: number; errors: number } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   // UI state
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
@@ -156,6 +163,15 @@ export default function AdminCertificados() {
   }, [submissions, searchTerm, filterAtividade, filterDateFrom, filterDateTo])
 
   // ─── Dashboard metrics ─────────────────────────────────────────
+  const allTimeMetrics = useMemo(() => {
+    const s = submissions
+    const total = s.length
+    const avgGroup = total > 0 ? s.reduce((a, x) => a + x.nota_grupo, 0) / total : 0
+    const avgCond = total > 0 ? s.reduce((a, x) => a + x.nota_condutor, 0) / total : 0
+    const relatos = s.filter(x => x.relato).length
+    return { total, avgGroup, avgCond, relatos }
+  }, [submissions])
+
   const metrics = useMemo(() => {
     const s = filteredSubmissions
     const total = s.length
@@ -163,22 +179,51 @@ export default function AdminCertificados() {
     const avgCond = total > 0 ? s.reduce((a, x) => a + x.nota_condutor, 0) / total : 0
     const relatos = s.filter(x => x.relato).length
 
-    const cMap = new Map<string, { ratings: number[]; count: number }>()
+    // Conductor ranking with Bayesian average:
+    // score = (C * m + sum_ratings) / (C + count)
+    // C = minimum confidence (we use median count), m = global avg rating
+    const cMap = new Map<string, { sum: number; count: number }>()
     s.forEach(x => x.condutores?.forEach(c => {
-      const e = cMap.get(c) || { ratings: [], count: 0 }
-      e.ratings.push(x.nota_condutor); e.count++
+      const e = cMap.get(c) || { sum: 0, count: 0 }
+      e.sum += x.nota_condutor; e.count++
       cMap.set(c, e)
     }))
+    const allCounts = Array.from(cMap.values()).map(d => d.count).sort((a, b) => a - b)
+    const C = allCounts.length > 0 ? allCounts[Math.floor(allCounts.length / 2)] : 1
+    const globalAvg = avgCond
     const conductorRanking = Array.from(cMap.entries())
-      .map(([name, d]) => ({ name, avg: d.ratings.reduce((a, b) => a + b, 0) / d.ratings.length, count: d.count }))
-      .sort((a, b) => b.avg - a.avg)
+      .map(([name, d]) => {
+        const avg = d.sum / d.count
+        const score = (C * globalAvg + d.sum) / (C + d.count)
+        return { name, avg, count: d.count, score }
+      })
+      .sort((a, b) => b.score - a.score || b.count - a.count)
 
+    // Activity distribution
     const aMap = new Map<string, number>()
     s.forEach(x => aMap.set(x.atividade_nome, (aMap.get(x.atividade_nome) || 0) + 1))
     const activityDist = Array.from(aMap.entries()).map(([n, c]) => ({ name: n, count: c })).sort((a, b) => b.count - a.count)
 
-    return { total, avgGroup, avgCond, relatos, conductorRanking, activityDist }
-  }, [filteredSubmissions])
+    // Period comparison: how this period compares to the previous equivalent period
+    const filterDate = getFilterDate(timeFilter)
+    let prevTotal = 0
+    let prevAvgGroup = 0
+    let prevAvgCond = 0
+    if (filterDate && timeFilter !== 'all') {
+      const now = new Date()
+      const periodMs = now.getTime() - filterDate.getTime()
+      const prevStart = new Date(filterDate.getTime() - periodMs)
+      const prevSubs = submissions.filter(x => {
+        const d = new Date(x.created_at)
+        return d >= prevStart && d < filterDate
+      })
+      prevTotal = prevSubs.length
+      prevAvgGroup = prevSubs.length > 0 ? prevSubs.reduce((a, x) => a + x.nota_grupo, 0) / prevSubs.length : 0
+      prevAvgCond = prevSubs.length > 0 ? prevSubs.reduce((a, x) => a + x.nota_condutor, 0) / prevSubs.length : 0
+    }
+
+    return { total, avgGroup, avgCond, relatos, conductorRanking, activityDist, prevTotal, prevAvgGroup, prevAvgCond }
+  }, [filteredSubmissions, submissions, timeFilter])
 
   // ─── Conductor detail ──────────────────────────────────────────
   const conductorDetail = useMemo(() => {
@@ -188,6 +233,14 @@ export default function AdminCertificados() {
     const relatos = s.filter(x => x.relato).map(x => ({ text: x.relato!, date: x.created_at }))
     return { name: selectedCondutor, avg, total: s.length, relatos }
   }, [selectedCondutor, filteredSubmissions])
+
+  // ─── Sync atividades from feedbacks ────────────────────────────
+  async function syncAtividades() {
+    const res = await adminApi({ action: 'sync_atividades' })
+    loadData()
+    if (res.added > 0) showToast(`${res.added} atividade${res.added > 1 ? 's' : ''} importada${res.added > 1 ? 's' : ''} (desativadas — publique as que quiser)`)
+    else showToast('Todas as atividades já estão cadastradas')
+  }
 
   // ─── CRUD: Atividades ──────────────────────────────────────────
   async function addAtividade() {
@@ -212,6 +265,13 @@ export default function AdminCertificados() {
   }
 
   // ─── CRUD: Condutores ──────────────────────────────────────────
+  async function syncCondutores() {
+    const res = await adminApi({ action: 'sync_condutores' })
+    loadData()
+    if (res.added > 0) showToast(`${res.added} condutor${res.added > 1 ? 'es' : ''} importado${res.added > 1 ? 's' : ''} dos feedbacks`)
+    else showToast('Todos os condutores já estão cadastrados')
+  }
+
   async function addCondutor() {
     if (!newCondutorNome.trim()) return
     await adminApi({ action: 'create_condutor', nome: newCondutorNome.trim() })
@@ -286,6 +346,90 @@ export default function AdminCertificados() {
     const blob = new Blob(['\uFEFF' + h + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `envios_${new Date().toISOString().split('T')[0]}.csv`; a.click()
     showToast('CSV exportado')
+  }
+
+  // ─── Import CSV from Google Forms ─────────────────────────────
+  function parseCSV(text: string): Record<string, string>[] {
+    const lines = text.split(/\r?\n/).filter(l => l.trim())
+    if (lines.length < 2) return []
+    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase())
+    const rows: Record<string, string>[] = []
+    for (let i = 1; i < lines.length; i++) {
+      const values: string[] = []
+      let current = ''
+      let inQuotes = false
+      for (const ch of lines[i]) {
+        if (ch === '"') { inQuotes = !inQuotes }
+        else if (ch === ',' && !inQuotes) { values.push(current.trim()); current = '' }
+        else { current += ch }
+      }
+      values.push(current.trim())
+      const row: Record<string, string> = {}
+      headers.forEach((h, idx) => { row[h] = (values[idx] || '').replace(/^"|"$/g, '') })
+      rows.push(row)
+    }
+    return rows
+  }
+
+  function findColumn(row: Record<string, string>, keywords: string[]): string {
+    for (const key of Object.keys(row)) {
+      const k = key.toLowerCase()
+      if (keywords.some(kw => k.includes(kw))) return row[key]
+    }
+    return ''
+  }
+
+  async function handleImportCSV(file: File) {
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const text = await file.text()
+      const rows = parseCSV(text)
+      if (rows.length === 0) { showToast('Arquivo vazio ou formato inválido'); setImporting(false); return }
+
+      let success = 0
+      let errors = 0
+
+      for (const row of rows) {
+        const nome = findColumn(row, ['nome completo', 'nome_completo', 'nome', 'name', 'full name'])
+        const email = findColumn(row, ['email', 'e-mail', 'mail'])
+        const atividade = findColumn(row, ['atividade', 'activity', 'grupo', 'group'])
+        const notaGrupoStr = findColumn(row, ['nota grupo', 'nota_grupo', 'group rating', 'nota do grupo', 'formato do grupo'])
+        const notaCondStr = findColumn(row, ['nota condutor', 'nota_condutor', 'conductor rating', 'nota do condutor', 'conduziu'])
+        const condutoresStr = findColumn(row, ['condutor', 'condutores', 'quem conduziu'])
+        const relato = findColumn(row, ['relato', 'experiência', 'experiencia', 'feedback', 'comentário', 'comentario', 'sugest'])
+
+        if (!nome && !email) { errors++; continue }
+
+        const notaGrupo = parseInt(notaGrupoStr) || 0
+        const notaCondutor = parseInt(notaCondStr) || 0
+        const condutores = condutoresStr ? condutoresStr.split(/[;,]/).map(c => c.trim()).filter(Boolean) : []
+
+        try {
+          await adminApi({
+            action: 'import_submission',
+            nome_completo: nome.trim(),
+            email: (email || '').trim().toLowerCase(),
+            atividade_nome: atividade.trim() || 'Importado',
+            nota_grupo: Math.min(notaGrupo, 10),
+            nota_condutor: Math.min(notaCondutor, 10),
+            condutores,
+            relato: relato.trim() || null,
+          })
+          success++
+        } catch {
+          errors++
+        }
+      }
+
+      setImportResult({ success, errors })
+      showToast(`Importados: ${success} | Erros: ${errors}`)
+      loadData()
+    } catch {
+      showToast('Erro ao processar arquivo')
+    } finally {
+      setImporting(false)
+    }
   }
 
   const uniqueAtividades = useMemo(() => Array.from(new Set(submissions.map(s => s.atividade_nome))).sort(), [submissions])
@@ -451,11 +595,17 @@ export default function AdminCertificados() {
           {tab === 'dashboard' && (
             <motion.div key="dash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <Stat icon={<FileText size={16} />} label="Certificados" value={metrics.total} />
-                <Stat icon={<Star size={16} />} label="Nota Grupo" value={metrics.avgGroup.toFixed(1)} suffix="/5" />
-                <Stat icon={<Users size={16} />} label="Nota Condutores" value={metrics.avgCond.toFixed(1)} suffix="/5" />
-                <Stat icon={<MessageSquare size={16} />} label="Relatos" value={metrics.relatos} />
+                <StatWithDelta icon={<FileText size={16} />} label="Feedbacks" value={metrics.total} prev={metrics.prevTotal} isCount timeFilter={timeFilter} />
+                <StatWithDelta icon={<Star size={16} />} label="Nota Grupo" value={metrics.avgGroup} prev={metrics.prevAvgGroup} suffix="/10" timeFilter={timeFilter} />
+                <StatWithDelta icon={<Users size={16} />} label="Nota Condutores" value={metrics.avgCond} prev={metrics.prevAvgCond} suffix="/10" timeFilter={timeFilter} />
+                <Stat icon={<MessageSquare size={16} />} label="Relatos" value={`${metrics.relatos}/${metrics.total}`} suffix={metrics.total > 0 ? `(${Math.round(metrics.relatos / metrics.total * 100)}%)` : ''} />
               </div>
+
+              {timeFilter !== 'all' && (
+                <div className="px-4 py-2.5 rounded-xl font-dm text-xs" style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)', color: 'rgba(253,251,247,0.3)' }}>
+                  Mostrando {metrics.total} de {allTimeMetrics.total} feedbacks ({TIME_LABELS[timeFilter].toLowerCase()}) · Média geral histórica: grupo {allTimeMetrics.avgGroup.toFixed(1)}, condutores {allTimeMetrics.avgCond.toFixed(1)}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card title="Atividades" icon={<Award size={16} />}>
@@ -465,7 +615,7 @@ export default function AdminCertificados() {
                       <div key={a.name} className="mb-3">
                         <div className="flex justify-between mb-1">
                           <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.6)' }}>{a.name}</span>
-                          <span className="font-dm text-xs font-bold" style={{ color: '#C84B31' }}>{a.count}</span>
+                          <span className="font-dm text-xs font-bold" style={{ color: '#C84B31' }}>{a.count} <span style={{ color: 'rgba(253,251,247,0.25)' }}>({pct.toFixed(0)}%)</span></span>
                         </div>
                         <div className="h-1.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}>
                           <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: 'rgba(200,75,49,0.5)' }} />
@@ -481,11 +631,18 @@ export default function AdminCertificados() {
                       className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/[0.02]">
                       <span className="font-dm text-sm font-bold w-5" style={{ color: i < 3 ? '#C84B31' : 'rgba(253,251,247,0.3)' }}>{i + 1}</span>
                       <span className="font-dm text-sm flex-1 text-left" style={{ color: 'rgba(253,251,247,0.7)' }}>{c.name}</span>
-                      <Star size={12} fill="#C84B31" stroke="#C84B31" />
-                      <span className="font-dm text-sm font-bold" style={{ color: '#C84B31' }}>{c.avg.toFixed(1)}</span>
-                      <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>{c.count}x</span>
+                      <div className="flex items-center gap-1">
+                        <Star size={12} fill="#C84B31" stroke="#C84B31" />
+                        <span className="font-dm text-sm font-bold" style={{ color: '#C84B31' }}>{c.avg.toFixed(1)}</span>
+                      </div>
+                      <span className="font-dm text-xs px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.04)', color: 'rgba(253,251,247,0.4)' }}>{c.count}x</span>
                     </button>
                   )) : <Empty message="Sem dados" />}
+                  {metrics.conductorRanking.length > 0 && (
+                    <p className="font-dm text-[10px] mt-2 pt-2" style={{ color: 'rgba(253,251,247,0.15)', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+                      Ranking pondera nota e volume de avaliações
+                    </p>
+                  )}
                 </Card>
               </div>
             </motion.div>
@@ -532,6 +689,11 @@ export default function AdminCertificados() {
                       style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }} />
                     <button onClick={addCondutor} className="px-4 py-3 rounded-xl" style={{ backgroundColor: '#C84B31', color: '#fff' }}>
                       <Plus size={16} />
+                    </button>
+                    <button onClick={syncCondutores} className="font-dm text-xs px-4 py-3 rounded-xl flex items-center gap-1.5"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.03)', color: 'rgba(253,251,247,0.5)', border: '1px solid rgba(255,255,255,0.06)' }}
+                      title="Importar condutores que aparecem nos feedbacks">
+                      <RefreshCw size={14} /> Sincronizar dos feedbacks
                     </button>
                   </div>
 
@@ -598,12 +760,28 @@ export default function AdminCertificados() {
                 <button onClick={addAtividade} className="px-4 py-3 rounded-xl" style={{ backgroundColor: '#C84B31', color: '#fff' }}>
                   <Plus size={16} />
                 </button>
+                <button onClick={syncAtividades} className="font-dm text-xs px-4 py-3 rounded-xl flex items-center gap-1.5 whitespace-nowrap"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.03)', color: 'rgba(253,251,247,0.5)', border: '1px solid rgba(255,255,255,0.06)' }}
+                  title="Importar atividades dos feedbacks (desativadas por padrão)">
+                  <RefreshCw size={14} /> Sincronizar dos feedbacks
+                </button>
               </div>
+              <p className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.25)' }}>
+                <Eye size={11} className="inline mb-0.5" style={{ color: '#C84B31' }} /> = publicada no formulário de certificação &nbsp;
+                <EyeOff size={11} className="inline mb-0.5" /> = oculta (não aparece no formulário)
+              </p>
               <div className="space-y-2">
-                {atividades.map(a => (
+                {atividades.map(a => {
+                  const feedbackCount = submissions.filter(s => s.atividade_nome === a.nome).length
+                  return (
                   <div key={a.id} className="flex items-center gap-3 p-3 rounded-xl"
                     style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
                     <span className="font-dm text-sm flex-1" style={{ color: a.ativo ? 'rgba(253,251,247,0.7)' : 'rgba(253,251,247,0.25)' }}>{a.nome}</span>
+                    {feedbackCount > 0 && (
+                      <span className="font-dm text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(200,75,49,0.08)', color: 'rgba(200,75,49,0.6)' }}>
+                        {feedbackCount} feedback{feedbackCount > 1 ? 's' : ''}
+                      </span>
+                    )}
                     <button onClick={() => toggleAtividade(a.id, a.ativo)} className="p-1.5 rounded-lg"
                       style={{ color: a.ativo ? '#C84B31' : 'rgba(253,251,247,0.2)' }}>
                       {a.ativo ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -613,7 +791,8 @@ export default function AdminCertificados() {
                       <Trash2 size={14} />
                     </button>
                   </div>
-                ))}
+                  )
+                })}
                 {atividades.length === 0 && <Empty message="Nenhuma atividade" />}
               </div>
             </motion.div>
@@ -669,7 +848,14 @@ export default function AdminCertificados() {
                     <Trash2 size={12} /> Excluir
                   </button>
                 )}
-                <button onClick={exportCSV} className="font-dm text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg ml-auto"
+                <label className="font-dm text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg cursor-pointer ml-auto"
+                  style={{ backgroundColor: 'rgba(200,75,49,0.1)', color: '#C84B31', border: '1px solid rgba(200,75,49,0.2)' }}>
+                  <Upload size={12} /> {importing ? 'Importando...' : 'Importar Forms'}
+                  <input type="file" accept=".csv" className="hidden" ref={fileInputRef}
+                    disabled={importing}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) { handleImportCSV(f); if (fileInputRef.current) fileInputRef.current.value = '' } }} />
+                </label>
+                <button onClick={exportCSV} className="font-dm text-xs flex items-center gap-1.5 px-3 py-1.5 rounded-lg"
                   style={{ backgroundColor: 'rgba(255,255,255,0.03)', color: 'rgba(253,251,247,0.5)', border: '1px solid rgba(255,255,255,0.06)' }}>
                   <Download size={12} /> CSV
                 </button>
@@ -691,8 +877,8 @@ export default function AdminCertificados() {
                       </div>
                       <p className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>{s.email} · {new Date(s.created_at).toLocaleDateString('pt-BR')}</p>
                       <div className="flex items-center gap-3 mt-1">
-                        <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>Grupo: {s.nota_grupo}/5</span>
-                        <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>Condutor: {s.nota_condutor}/5</span>
+                        <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>Grupo: {s.nota_grupo}/10</span>
+                        <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>Condutor: {s.nota_condutor}/10</span>
                         {s.condutores?.length > 0 && <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.2)' }}>{s.condutores.join(', ')}</span>}
                       </div>
                       {s.relato && <p className="font-dm text-xs mt-1 italic" style={{ color: 'rgba(253,251,247,0.3)' }}>&ldquo;{s.relato}&rdquo;</p>}
@@ -734,6 +920,35 @@ function Stat({ icon, label, value, suffix }: { icon: React.ReactNode; label: st
       </div>
       <span className="font-fraunces font-bold text-2xl" style={{ color: 'rgba(253,251,247,0.9)' }}>{value}</span>
       {suffix && <span className="font-dm text-sm ml-1" style={{ color: 'rgba(253,251,247,0.3)' }}>{suffix}</span>}
+    </div>
+  )
+}
+
+function StatWithDelta({ icon, label, value, prev, suffix, isCount, timeFilter }: {
+  icon: React.ReactNode; label: string; value: number; prev: number; suffix?: string; isCount?: boolean; timeFilter: TimeFilter
+}) {
+  const display = isCount ? value : value.toFixed(1)
+  const delta = prev > 0 ? ((value - prev) / prev) * 100 : 0
+  const showDelta = timeFilter !== 'all' && prev > 0
+  return (
+    <div className="p-4 rounded-xl" style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="flex items-center gap-2 mb-2" style={{ color: '#C84B31' }}>
+        {icon}
+        <span className="font-dm text-xs uppercase tracking-wider" style={{ color: 'rgba(253,251,247,0.3)' }}>{label}</span>
+      </div>
+      <div className="flex items-baseline gap-2">
+        <span className="font-fraunces font-bold text-2xl" style={{ color: 'rgba(253,251,247,0.9)' }}>{display}</span>
+        {suffix && <span className="font-dm text-sm" style={{ color: 'rgba(253,251,247,0.3)' }}>{suffix}</span>}
+      </div>
+      {showDelta && (
+        <div className="flex items-center gap-1 mt-1.5">
+          <TrendingUp size={11} style={{ color: delta >= 0 ? '#22c55e' : '#ef4444', transform: delta < 0 ? 'scaleY(-1)' : 'none' }} />
+          <span className="font-dm text-[10px] font-medium" style={{ color: delta >= 0 ? '#22c55e' : '#ef4444' }}>
+            {delta >= 0 ? '+' : ''}{delta.toFixed(1)}%
+          </span>
+          <span className="font-dm text-[10px]" style={{ color: 'rgba(253,251,247,0.2)' }}>vs período anterior</span>
+        </div>
+      )}
     </div>
   )
 }

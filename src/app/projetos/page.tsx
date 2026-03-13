@@ -1,16 +1,12 @@
 import NavBar from "@/components/NavBar";
 import Footer from "@/components/Footer";
-import HeroFormacao from "@/components/formacao/HeroFormacao";
-import DestaqueCards from "@/components/formacao/DestaqueCards";
-import CursosGrid from "@/components/formacao/CursosGrid";
-import { FormacaoSincrona, PilaresSection } from "@/components/formacao/FormacaoSincrona";
 
 export const metadata = {
-  title: "Formações e Cursos — Associação Allos",
-  description: "Conteúdos críticos e existenciais para a prática clínica. Cursos gravados, ao vivo e formação síncrona contínua.",
+  title: "Projetos — Associação Allos",
+  description: "Projetos da Associação Allos.",
 };
 
-export default function FormacaoPage() {
+export default function ProjetosPage() {
   return (
     <>
       <NavBar />

@@ -36,6 +36,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(data || null)
   }
 
+  // All events (admin)
+  if (type === 'eventos') {
+    const { data, error } = await sb().from('certificado_eventos').select('*').order('data_inicio', { ascending: false })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data)
+  }
+
+  // Active events only (public - filtered by date)
+  if (type === 'eventos_ativos') {
+    const now = new Date().toISOString()
+    const { data, error } = await sb()
+      .from('certificado_eventos')
+      .select('*')
+      .eq('ativo', true)
+      .lte('data_inicio', now)
+      .gte('data_fim', now)
+      .order('data_fim')
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data)
+  }
+
   return NextResponse.json({ error: 'type param required' }, { status: 400 })
 }
 
@@ -137,6 +158,36 @@ export async function POST(req: NextRequest) {
   // Reset all statuses to pendente
   if (action === 'reset_statuses') {
     const { error } = await sb().from('formacao_slots').update({ status: 'pendente' }).neq('status', 'pendente')
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
+  }
+
+  // ── Eventos ──────────────────────────────────────────────
+  if (action === 'create_evento') {
+    const { titulo, descricao, data_inicio, data_fim } = body
+    const { data, error } = await sb().from('certificado_eventos')
+      .insert({ titulo, descricao: descricao || null, data_inicio, data_fim })
+      .select().single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(data)
+  }
+
+  if (action === 'update_evento') {
+    const { id, titulo, descricao, data_inicio, data_fim, ativo } = body
+    const updates: Record<string, unknown> = {}
+    if (titulo !== undefined) updates.titulo = titulo
+    if (descricao !== undefined) updates.descricao = descricao || null
+    if (data_inicio !== undefined) updates.data_inicio = data_inicio
+    if (data_fim !== undefined) updates.data_fim = data_fim
+    if (ativo !== undefined) updates.ativo = ativo
+    const { error } = await sb().from('certificado_eventos').update(updates).eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
+  }
+
+  if (action === 'delete_evento') {
+    const { id } = body
+    const { error } = await sb().from('certificado_eventos').delete().eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ success: true })
   }

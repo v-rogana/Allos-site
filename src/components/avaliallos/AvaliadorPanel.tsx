@@ -7,6 +7,7 @@ import RascunhoTool from './RascunhoTool'
 import QuadroSemanal from './QuadroSemanal'
 import DiretrizesPanel from './DiretrizesPanel'
 import AtmosphericBg from './AtmosphericBg'
+import StatsPanel from './StatsPanel'
 
 interface Avaliador { id: string; nome: string }
 interface DispFixo { id: string; avaliador_id: string; avaliadores: Avaliador }
@@ -31,8 +32,9 @@ export default function AvaliadorPanel() {
   const [toast, setToast] = useState('')
   const [showNew, setShowNew] = useState(false)
   const [ns, setNs] = useState({ data: '', hora: '' })
-  const [avTab, setAvTab] = useState<'quadro'|'horarios'|'rascunho'|'avaliacoes'|'diretrizes'>('quadro')
+  const [avTab, setAvTab] = useState<'quadro'|'horarios'|'rascunho'|'avaliacoes'|'diretrizes'|'stats'>('quadro')
   const [refreshKey, setRefreshKey] = useState(0)
+  const [statsKey, setStatsKey] = useState(0)
   // Candidatos inscritos nos fixos (fetch from avaliados)
   const [avaliados, setAvaliados] = useState<{ id: string; nome_completo: string; fixos_escolhidos: string }[]>([])
 
@@ -102,6 +104,9 @@ export default function AvaliadorPanel() {
   const fixosByDia = fixos.reduce<Record<string, SlotFixo[]>>((a, s) => { if (!a[s.dia_semana]) a[s.dia_semana] = []; a[s.dia_semana].push(s); return a }, {})
   const avulsosByDate = avulsos.reduce<Record<string, SlotAvulso[]>>((a, s) => { if (!a[s.data]) a[s.data] = []; a[s.data].push(s); return a }, {})
 
+  const nomeWords = nome.trim().split(/\s+/).filter(Boolean)
+  const hasFullName = nomeWords.length >= 2 && nomeWords.every(w => w.length >= 2)
+
   if (!ready) {
     return (
       <div className="min-h-screen relative">
@@ -113,11 +118,28 @@ export default function AvaliadorPanel() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={teal} strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
             </div>
             <h2 className="font-fraunces text-2xl mb-2" style={{ color: 'rgba(253,251,247,0.95)' }}>Painel do Avaliador</h2>
-            <p className="font-dm text-sm" style={{ color: 'rgba(253,251,247,0.4)' }}>Digite seu nome para continuar</p>
+            <p className="font-dm text-sm" style={{ color: 'rgba(253,251,247,0.4)' }}>Digite seu nome completo para continuar</p>
           </div>
           <div className="rounded-3xl p-6" style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: `1.5px solid ${brd}`, backdropFilter: 'blur(12px)' }}>
-            <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Seu nome" className="font-dm w-full px-4 py-3.5 rounded-2xl text-sm outline-none transition-all mb-4 placeholder:text-white/20" style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: `1.5px solid ${brd}`, color: 'rgba(253,251,247,0.9)' }} onKeyDown={e => { if (e.key === 'Enter' && nome.trim()) setReady(true) }} />
-            <button onClick={() => nome.trim() && setReady(true)} disabled={!nome.trim()} className="font-dm w-full py-3.5 rounded-2xl text-sm font-bold transition-all hover:-translate-y-0.5 disabled:opacity-30" style={{ backgroundColor: teal, color: '#fff', boxShadow: '0 4px 20px rgba(14,165,160,0.25)' }}>Continuar</button>
+            <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Nome e Sobrenome" className="font-dm w-full px-4 py-3.5 rounded-2xl text-sm outline-none transition-all mb-3 placeholder:text-white/20" style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: `1.5px solid ${nome.trim() && !hasFullName ? 'rgba(200,75,49,0.5)' : brd}`, color: 'rgba(253,251,247,0.9)' }} onKeyDown={e => { if (e.key === 'Enter' && hasFullName) setReady(true) }} />
+
+            {/* Full name warning */}
+            <div className="rounded-xl px-4 py-3 mb-4 flex items-start gap-3" style={{
+              backgroundColor: nome.trim() && !hasFullName ? 'rgba(200,75,49,0.08)' : 'rgba(14,165,160,0.06)',
+              border: `1px solid ${nome.trim() && !hasFullName ? 'rgba(200,75,49,0.2)' : 'rgba(14,165,160,0.15)'}`,
+            }}>
+              <svg className="flex-shrink-0 mt-0.5" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={nome.trim() && !hasFullName ? '#C84B31' : teal} strokeWidth="2" strokeLinecap="round">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+              </svg>
+              <p className="font-dm text-xs leading-relaxed" style={{ color: nome.trim() && !hasFullName ? '#C84B31' : 'rgba(253,251,247,0.5)' }}>
+                <strong>Use seu nome completo</strong> (nome e sobrenome).
+                {nome.trim() && !hasFullName
+                  ? ' Por favor, inclua pelo menos nome e sobrenome para que possamos te identificar corretamente.'
+                  : ' Isso evita duplicidades e garante que suas avaliações fiquem corretamente registradas.'}
+              </p>
+            </div>
+
+            <button onClick={() => hasFullName && setReady(true)} disabled={!hasFullName} className="font-dm w-full py-3.5 rounded-2xl text-sm font-bold transition-all hover:-translate-y-0.5 disabled:opacity-30 disabled:cursor-not-allowed" style={{ backgroundColor: teal, color: '#fff', boxShadow: hasFullName ? '0 4px 20px rgba(14,165,160,0.25)' : 'none' }}>Continuar</button>
           </div>
         </motion.div>
         </div>
@@ -165,19 +187,22 @@ export default function AvaliadorPanel() {
           { k: 'rascunho' as const, l: 'Rascunho' },
           { k: 'avaliacoes' as const, l: 'Avaliações' },
           { k: 'diretrizes' as const, l: 'Diretrizes' },
+          { k: 'stats' as const, l: 'Estatísticas' },
         ]).map(t => (
           <button key={t.k} onClick={() => setAvTab(t.k)} className="font-dm text-xs sm:text-sm flex-1 py-3 rounded-xl transition-all duration-300 font-medium whitespace-nowrap px-2 sm:px-3" style={{ background: avTab === t.k ? 'linear-gradient(135deg, rgba(14,165,160,0.15), rgba(14,165,160,0.05))' : 'transparent', color: avTab === t.k ? teal : 'rgba(253,251,247,0.3)', border: avTab === t.k ? '1px solid rgba(14,165,160,0.2)' : '1px solid transparent', boxShadow: avTab === t.k ? '0 2px 12px rgba(14,165,160,0.1)' : 'none' }}>{t.l}</button>
         ))}
       </div>
 
       {avTab === 'avaliacoes' ? (
-        <AvaliacaoTool key={refreshKey} avaliadorNome={nome} />
+        <AvaliacaoTool key={refreshKey} avaliadorNome={nome} onDataChange={() => setStatsKey(k => k + 1)} />
       ) : avTab === 'rascunho' ? (
         <RascunhoTool />
       ) : avTab === 'quadro' ? (
         <QuadroSemanal key={`q${refreshKey}`} readOnly />
       ) : avTab === 'diretrizes' ? (
         <DiretrizesPanel />
+      ) : avTab === 'stats' ? (
+        <StatsPanel key={statsKey} />
       ) : (
       <>
 

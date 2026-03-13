@@ -12,7 +12,7 @@ interface Avaliacao {
   acolhimento: number; seguranca_terapeuta: number; seguranca_metodo: number
   aprofundamento: number; hipoteses: number; interpretacao: number
   frase_timing: number; corpo_setting: number; insight_potencia: number
-  observacoes: string|null; avaliador_nome: string; avaliado_nome: string|null
+  observacoes: string|null; telefone: string|null; avaliador_nome: string; avaliado_nome: string|null
   [key: string]: unknown
 }
 
@@ -62,9 +62,10 @@ type View = 'list' | 'create' | 'edit' | 'detail'
 
 interface Props {
   avaliadorNome: string
+  onDataChange?: () => void
 }
 
-export default function AvaliacaoTool({ avaliadorNome }: Props) {
+export default function AvaliacaoTool({ avaliadorNome, onDataChange }: Props) {
   const [view, setView] = useState<View>('list')
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([])
   const [avaliadores, setAvaliadores] = useState<AvaliadorReg[]>([])
@@ -72,6 +73,19 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
   const [selected, setSelected] = useState<Avaliacao|null>(null)
+
+  // Filters
+  const [busca, setBusca] = useState('')
+  const [filtroAvaliador, setFiltroAvaliador] = useState('')
+  const [filtroAvaliado, setFiltroAvaliado] = useState('')
+
+  // Name editing
+  const [editingName, setEditingName] = useState<{ type: 'avaliador' | 'avaliado'; id: string; nome: string } | null>(null)
+  const [editNameVal, setEditNameVal] = useState('')
+  // Merge avaliadores
+  const [mergeSource, setMergeSource] = useState('')
+  const [mergeTarget, setMergeTarget] = useState('')
+  const [showMerge, setShowMerge] = useState(false)
 
   // Form state
   const emptyForm = {
@@ -81,7 +95,7 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
     acolhimento: 0, seguranca_terapeuta: 0, seguranca_metodo: 0,
     aprofundamento: 0, hipoteses: 0, interpretacao: 0,
     frase_timing: 0, corpo_setting: 0, insight_potencia: 0,
-    observacoes: '',
+    observacoes: '', telefone: '',
   }
   const [form, setForm] = useState(emptyForm)
 
@@ -131,12 +145,13 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
       corpo_setting: form.corpo_setting,
       insight_potencia: form.insight_potencia,
       observacoes: form.observacoes || null,
+      telefone: form.telefone || null,
     }
     try {
       const r = await fetch('/api/avaliallos/avaliacoes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const d = await r.json()
       if (!r.ok) { flash(d.error || 'Erro ao criar'); return }
-      flash('Avaliação criada!'); setView('list'); setForm(emptyForm); fetchAll()
+      flash('Avaliação criada!'); setView('list'); setForm(emptyForm); fetchAll(); onDataChange?.()
     } catch (e) { console.error(e); flash('Erro ao criar') }
   }
 
@@ -163,19 +178,49 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
       corpo_setting: form.corpo_setting,
       insight_potencia: form.insight_potencia,
       observacoes: form.observacoes || null,
+      telefone: form.telefone || null,
     }
     try {
       const r = await fetch('/api/avaliallos/avaliacoes', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       const d = await r.json()
       if (!r.ok) { flash(d.error || 'Erro ao salvar'); return }
-      flash('Avaliação atualizada!'); setView('list'); fetchAll()
+      flash('Avaliação atualizada!'); setView('list'); fetchAll(); onDataChange?.()
     } catch (e) { console.error(e); flash('Erro ao salvar') }
   }
 
   const excluir = async (id: number) => {
     if (!confirm('Excluir esta avaliação?')) return
     await fetch(`/api/avaliallos/avaliacoes?id=${id}`, { method: 'DELETE' })
-    flash('Excluída'); if (view === 'detail') setView('list'); fetchAll()
+    flash('Excluída'); if (view === 'detail') setView('list'); fetchAll(); onDataChange?.()
+  }
+
+  const editName = async () => {
+    if (!editingName || !editNameVal.trim()) return
+    const endpoint = editingName.type === 'avaliador' ? '/api/avaliallos/avaliadores' : '/api/avaliallos/avaliados'
+    const payload = editingName.type === 'avaliador'
+      ? { id: editingName.id, nome: editNameVal.trim() }
+      : { id: editingName.id, nome_completo: editNameVal.trim() }
+    const r = await fetch(endpoint, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    if (r.ok) { flash('Nome atualizado!'); setEditingName(null); fetchAll(); onDataChange?.() }
+    else flash('Erro ao atualizar')
+  }
+
+  const deleteName = async (type: 'avaliador' | 'avaliado', id: string, nome: string) => {
+    if (!confirm(`Excluir ${type === 'avaliador' ? 'avaliador' : 'avaliado'} "${nome}"? Isso pode afetar avaliações associadas.`)) return
+    const endpoint = type === 'avaliador' ? `/api/avaliallos/avaliadores?id=${id}` : `/api/avaliallos/avaliados?id=${id}`
+    await fetch(endpoint, { method: 'DELETE' })
+    flash('Excluído!'); fetchAll(); onDataChange?.()
+  }
+
+  const mergeAvaliadores = async () => {
+    if (!mergeSource || !mergeTarget || mergeSource === mergeTarget) return flash('Selecione dois avaliadores diferentes')
+    const sourceName = avaliadores.find(a => a.id === mergeSource)?.nome
+    const targetName = avaliadores.find(a => a.id === mergeTarget)?.nome
+    if (!confirm(`Unificar "${sourceName}" → "${targetName}"?\nTodas as avaliações de "${sourceName}" serão atribuídas a "${targetName}" e "${sourceName}" será excluído.`)) return
+    const r = await fetch('/api/avaliallos/avaliadores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge', source_id: mergeSource, target_id: mergeTarget }) })
+    const d = await r.json()
+    if (d.success) { flash(`Unificado! ${d.merged_avaliacoes} avaliações transferidas`); setMergeSource(''); setMergeTarget(''); setShowMerge(false); fetchAll(); onDataChange?.() }
+    else flash(d.error || 'Erro')
   }
 
   const openDetail = (a: Avaliacao) => { setSelected(a); setView('detail') }
@@ -189,7 +234,7 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
       seguranca_terapeuta: a.seguranca_terapeuta, seguranca_metodo: a.seguranca_metodo,
       aprofundamento: a.aprofundamento, hipoteses: a.hipoteses, interpretacao: a.interpretacao,
       frase_timing: a.frase_timing, corpo_setting: a.corpo_setting, insight_potencia: a.insight_potencia,
-      observacoes: a.observacoes || '',
+      observacoes: a.observacoes || '', telefone: a.telefone || '',
     })
     setView('edit')
   }
@@ -204,6 +249,10 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
   const critByCategory = CRITERIOS.reduce<Record<string, typeof CRITERIOS>>((acc, c) => {
     if (!acc[c.cat]) acc[c.cat] = []; acc[c.cat].push(c); return acc
   }, {})
+
+  const computeTotal = (f: typeof form) => CRITERIOS.reduce((s, c) => s + (f[c.key as keyof typeof f] as number), 0)
+  const filledCount = CRITERIOS.filter(c => (form[c.key as keyof typeof form] as number) !== 0).length
+  const formTotal = computeTotal(form)
 
   const inp = { backgroundColor: 'rgba(253,251,247,0.04)', border: `1.5px solid ${B}`, color: X, borderRadius: '12px', colorScheme: 'dark' as const }
 
@@ -237,6 +286,10 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
             <label className="font-dm text-xs font-medium block mb-1.5" style={{ color: X3 }}>Nome (Candidato Externo)</label>
             <input type="text" value={form.nome_sessao} onChange={e => setForm({ ...form, nome_sessao: e.target.value })} placeholder="Nome do avaliado" className="font-dm text-sm w-full px-4 py-3 rounded-xl placeholder:text-white/20" style={inp} />
           </div>
+        </div>
+        <div className="mt-4">
+          <label className="font-dm text-xs font-medium block mb-1.5" style={{ color: X3 }}>Telefone <span style={{ opacity: 0.5 }}>(opcional)</span></label>
+          <input type="tel" value={form.telefone} onChange={e => setForm({ ...form, telefone: e.target.value })} placeholder="(31) 99999-9999" className="font-dm text-sm w-full sm:w-1/2 px-4 py-3 rounded-xl placeholder:text-white/20" style={inp} />
         </div>
       </div>
 
@@ -283,6 +336,47 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
           ))}
         </div>
       </div>
+
+      {/* Live Score */}
+      {filledCount > 0 && (
+        <div className="rounded-2xl p-5" style={{ backgroundColor: C, border: `1.5px solid ${B}` }}>
+          <div className="flex items-center justify-between mb-3">
+            <span className="font-dm text-xs font-bold tracking-widest uppercase" style={{ color: X3 }}>Nota Total</span>
+            <span className="font-dm text-xs" style={{ color: X3 }}>{filledCount}/12 critérios preenchidos</span>
+          </div>
+          <div className="flex items-center gap-5">
+            <span className="font-fraunces text-4xl font-bold" style={{ color: formTotal >= 25 ? T : formTotal >= 0 ? '#1BBAB0' : '#C84B31' }}>
+              {formTotal > 0 ? '+' : ''}{formTotal}
+            </span>
+            <div className="flex-1">
+              <div className="h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(253,251,247,0.04)' }}>
+                <div className="h-full rounded-full transition-all duration-300" style={{
+                  width: `${((formTotal + 108) / 216) * 100}%`,
+                  backgroundColor: formTotal >= 25 ? T : formTotal >= 0 ? '#1BBAB0' : '#C84B31',
+                  opacity: 0.6,
+                }} />
+              </div>
+              <div className="flex justify-between mt-1">
+                <span className="font-dm text-[9px]" style={{ color: 'rgba(253,251,247,0.15)' }}>-108</span>
+                <span className="font-dm text-[9px]" style={{ color: 'rgba(253,251,247,0.15)' }}>0</span>
+                <span className="font-dm text-[9px]" style={{ color: 'rgba(14,165,160,0.3)' }}>+25</span>
+                <span className="font-dm text-[9px]" style={{ color: 'rgba(253,251,247,0.15)' }}>+108</span>
+              </div>
+            </div>
+          </div>
+          {filledCount === 12 && (
+            <div className="mt-3 px-3 py-2 rounded-lg" style={{
+              backgroundColor: formTotal >= 25 ? 'rgba(14,165,160,0.08)' : formTotal >= 0 ? 'rgba(27,186,176,0.06)' : 'rgba(200,75,49,0.08)',
+              border: `1px solid ${formTotal >= 25 ? 'rgba(14,165,160,0.15)' : formTotal >= 0 ? 'rgba(27,186,176,0.1)' : 'rgba(200,75,49,0.15)'}`,
+            }}>
+              <span className="font-dm text-xs" style={{ color: formTotal >= 25 ? T : formTotal >= 0 ? '#1BBAB0' : '#C84B31' }}>
+                {formTotal >= 25 ? 'Acima da nota de corte (+25)' : formTotal >= 0 ? 'Abaixo da nota de corte (+25), mas positivo' : 'Pontuação negativa'}
+                {' · '}Média: {(formTotal / 12).toFixed(1)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Observações */}
       <div>
@@ -338,7 +432,7 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
           </div>
 
           {/* Info row */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div>
               <span className="font-dm text-xs block mb-1" style={{ color: X3 }}>Avaliador</span>
               <span className="font-dm text-sm font-bold" style={{ color: X }}>{selected.avaliador_nome}</span>
@@ -351,7 +445,32 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
               <span className="font-dm text-xs block mb-1" style={{ color: X3 }}>Nome/Sessão</span>
               <span className="font-dm text-sm font-bold" style={{ color: X }}>{selected.nome_sessao}</span>
             </div>
+            {selected.telefone && (
+              <div>
+                <span className="font-dm text-xs block mb-1" style={{ color: X3 }}>Telefone</span>
+                <span className="font-dm text-sm font-bold" style={{ color: X }}>{selected.telefone}</span>
+              </div>
+            )}
           </div>
+
+          {/* Total score */}
+          {(() => {
+            const tot = CRITERIOS.reduce((s, c) => s + ((selected[c.key as keyof Avaliacao] as number) || 0), 0)
+            const avg = (tot / 12).toFixed(1)
+            return (
+              <div className="mt-4 flex items-center gap-4 px-4 py-3 rounded-xl" style={{
+                backgroundColor: tot >= 25 ? 'rgba(14,165,160,0.06)' : tot >= 0 ? 'rgba(27,186,176,0.04)' : 'rgba(200,75,49,0.06)',
+                border: `1px solid ${tot >= 25 ? 'rgba(14,165,160,0.15)' : tot >= 0 ? 'rgba(27,186,176,0.1)' : 'rgba(200,75,49,0.15)'}`,
+              }}>
+                <span className="font-fraunces text-2xl font-bold" style={{ color: tot >= 25 ? T : tot >= 0 ? '#1BBAB0' : '#C84B31' }}>
+                  {tot > 0 ? '+' : ''}{tot}
+                </span>
+                <div className="font-dm text-xs" style={{ color: X3 }}>
+                  Pontuação total · Média {avg} · {tot >= 25 ? 'Acima do corte' : tot >= 0 ? 'Abaixo do corte' : 'Negativo'}
+                </div>
+              </div>
+            )
+          })()}
         </div>
 
         {/* Scores */}
@@ -410,10 +529,28 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
     )
   }
 
+  // Filtered avaliacoes
+  const filteredAvaliacoes = avaliacoes.filter(a => {
+    if (filtroAvaliador && a.avaliador_id !== filtroAvaliador) return false
+    if (filtroAvaliado && a.avaliado_id !== filtroAvaliado) return false
+    if (busca) {
+      const q = busca.toLowerCase()
+      const match = (a.avaliador_nome || '').toLowerCase().includes(q) ||
+        (a.avaliado_nome || '').toLowerCase().includes(q) ||
+        (a.nome_sessao || '').toLowerCase().includes(q)
+      if (!match) return false
+    }
+    return true
+  })
+
+  // Unique avaliadores/avaliados in current data for filters
+  const usedAvaliadores = Array.from(new Map(avaliacoes.filter(a => a.avaliador_id).map(a => [a.avaliador_id, a.avaliador_nome])).entries()).sort((a, b) => a[1].localeCompare(b[1]))
+  const usedAvaliados = Array.from(new Map(avaliacoes.filter(a => a.avaliado_id && a.avaliado_nome).map(a => [a.avaliado_id!, a.avaliado_nome!])).entries()).sort((a, b) => a[1].localeCompare(b[1]))
+
   // LIST VIEW
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h2 className="font-fraunces text-2xl" style={{ color: X }}>Avaliações de Seleção</h2>
         <button onClick={openCreate}
           className="font-dm text-sm px-5 py-3 rounded-xl text-white font-medium transition-all hover:-translate-y-0.5 inline-flex items-center gap-2"
@@ -423,30 +560,156 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
         </button>
       </div>
 
-      {avaliacoes.length === 0 ? (
+      {/* Search & Filters */}
+      <div className="space-y-3 mb-6">
+        <div className="relative">
+          <svg className="absolute left-4 top-1/2 -translate-y-1/2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(253,251,247,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <input type="text" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por nome de avaliador, avaliado ou sessão..." className="font-dm w-full pl-11 pr-4 py-3 rounded-2xl text-sm outline-none transition-all placeholder:text-white/20" style={{ backgroundColor: C, border: `1.5px solid ${B}`, color: X }} onFocus={e => { e.target.style.borderColor = 'rgba(14,165,160,0.4)' }} onBlur={e => { e.target.style.borderColor = B }} />
+          {busca && <button onClick={() => setBusca('')} className="absolute right-4 top-1/2 -translate-y-1/2 font-dm text-xs" style={{ color: X3 }}>✕</button>}
+        </div>
+
+        <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex-1 min-w-[180px]">
+            <select value={filtroAvaliador} onChange={e => setFiltroAvaliador(e.target.value)} className="font-dm text-sm w-full px-4 py-2.5 rounded-xl" style={{ backgroundColor: '#1A1A1A', border: `1.5px solid ${B}`, color: filtroAvaliador ? X : X3, colorScheme: 'dark' }}>
+              <option value="" style={{ backgroundColor: '#1A1A1A' }}>Todos os avaliadores</option>
+              {usedAvaliadores.map(([id, nome]) => <option key={id} value={id!} style={{ backgroundColor: '#1A1A1A' }}>{nome}</option>)}
+            </select>
+          </div>
+          <div className="flex-1 min-w-[180px]">
+            <select value={filtroAvaliado} onChange={e => setFiltroAvaliado(e.target.value)} className="font-dm text-sm w-full px-4 py-2.5 rounded-xl" style={{ backgroundColor: '#1A1A1A', border: `1.5px solid ${B}`, color: filtroAvaliado ? X : X3, colorScheme: 'dark' }}>
+              <option value="" style={{ backgroundColor: '#1A1A1A' }}>Todos os avaliados</option>
+              {usedAvaliados.map(([id, nome]) => <option key={id} value={id!} style={{ backgroundColor: '#1A1A1A' }}>{nome}</option>)}
+            </select>
+          </div>
+          <button onClick={() => setShowMerge(!showMerge)} className="font-dm text-xs px-3 py-2.5 rounded-xl font-medium inline-flex items-center gap-1.5 transition-all" style={{ backgroundColor: showMerge ? 'rgba(139,92,246,0.15)' : C, color: showMerge ? '#8B5CF6' : X3, border: `1px solid ${showMerge ? 'rgba(139,92,246,0.3)' : B}` }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 3v12"/><path d="M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            Gerenciar nomes
+          </button>
+          {(busca || filtroAvaliador || filtroAvaliado) && (
+            <button onClick={() => { setBusca(''); setFiltroAvaliador(''); setFiltroAvaliado('') }} className="font-dm text-xs px-3 py-2.5 rounded-xl" style={{ color: '#C84B31' }}>Limpar filtros</button>
+          )}
+        </div>
+
+        <p className="font-dm text-xs" style={{ color: X3 }}>{filteredAvaliacoes.length} de {avaliacoes.length} avaliações</p>
+      </div>
+
+      {/* Merge / Name management panel */}
+      <AnimatePresence>{showMerge && (
+        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-6">
+          <div className="rounded-2xl p-5 space-y-5" style={{ backgroundColor: C, border: `1.5px solid rgba(139,92,246,0.2)` }}>
+
+            {/* Merge avaliadores */}
+            <div>
+              <h4 className="font-dm text-sm font-bold mb-3" style={{ color: '#8B5CF6' }}>Unificar avaliadores</h4>
+              <p className="font-dm text-xs mb-3" style={{ color: X3 }}>Selecione o duplicado e o destino. Todas as avaliações serão transferidas e o duplicado será excluído.</p>
+              <div className="flex flex-wrap gap-3 items-end">
+                <div className="flex-1 min-w-[180px]">
+                  <label className="font-dm text-xs block mb-1" style={{ color: X3 }}>Duplicado (será excluído)</label>
+                  <select value={mergeSource} onChange={e => setMergeSource(e.target.value)} className="font-dm text-sm w-full px-4 py-2.5 rounded-xl" style={{ backgroundColor: '#1A1A1A', border: `1.5px solid ${B}`, color: X, colorScheme: 'dark' }}>
+                    <option value="" style={{ backgroundColor: '#1A1A1A' }}>Selecione...</option>
+                    {avaliadores.map(a => <option key={a.id} value={a.id} style={{ backgroundColor: '#1A1A1A' }}>{a.nome}</option>)}
+                  </select>
+                </div>
+                <span className="font-dm text-sm py-2.5" style={{ color: X3 }}>→</span>
+                <div className="flex-1 min-w-[180px]">
+                  <label className="font-dm text-xs block mb-1" style={{ color: X3 }}>Destino (será mantido)</label>
+                  <select value={mergeTarget} onChange={e => setMergeTarget(e.target.value)} className="font-dm text-sm w-full px-4 py-2.5 rounded-xl" style={{ backgroundColor: '#1A1A1A', border: `1.5px solid ${B}`, color: X, colorScheme: 'dark' }}>
+                    <option value="" style={{ backgroundColor: '#1A1A1A' }}>Selecione...</option>
+                    {avaliadores.filter(a => a.id !== mergeSource).map(a => <option key={a.id} value={a.id} style={{ backgroundColor: '#1A1A1A' }}>{a.nome}</option>)}
+                  </select>
+                </div>
+                <button onClick={mergeAvaliadores} className="font-dm text-xs px-4 py-2.5 rounded-xl text-white font-medium" style={{ backgroundColor: '#8B5CF6' }}>Unificar</button>
+              </div>
+            </div>
+
+            <div className="h-px" style={{ backgroundColor: B }} />
+
+            {/* Avaliadores list */}
+            <div>
+              <h4 className="font-dm text-sm font-bold mb-3" style={{ color: T }}>Avaliadores ({avaliadores.length})</h4>
+              <div className="flex flex-wrap gap-2">
+                {avaliadores.map(a => (
+                  <div key={a.id} className="font-dm text-xs px-3 py-2 rounded-xl inline-flex items-center gap-2" style={{ backgroundColor: 'rgba(14,165,160,0.06)', border: `1px solid rgba(14,165,160,0.15)` }}>
+                    <span style={{ color: X }}>{a.nome}</span>
+                    <button onClick={() => { setEditingName({ type: 'avaliador', id: a.id, nome: a.nome }); setEditNameVal(a.nome) }} className="opacity-50 hover:opacity-100" style={{ color: T }} title="Editar nome">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button onClick={() => deleteName('avaliador', a.id, a.nome)} className="opacity-50 hover:opacity-100" style={{ color: '#C84B31' }} title="Excluir">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="h-px" style={{ backgroundColor: B }} />
+
+            {/* Avaliados list */}
+            <div>
+              <h4 className="font-dm text-sm font-bold mb-3" style={{ color: '#D4854A' }}>Avaliados ({avaliados.length})</h4>
+              <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto">
+                {avaliados.map(a => (
+                  <div key={a.id} className="font-dm text-xs px-3 py-2 rounded-xl inline-flex items-center gap-2" style={{ backgroundColor: 'rgba(212,133,74,0.06)', border: `1px solid rgba(212,133,74,0.15)` }}>
+                    <span style={{ color: X }}>{a.nome_completo}</span>
+                    <button onClick={() => { setEditingName({ type: 'avaliado', id: a.id, nome: a.nome_completo }); setEditNameVal(a.nome_completo) }} className="opacity-50 hover:opacity-100" style={{ color: '#D4854A' }} title="Editar nome">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button onClick={() => deleteName('avaliado', a.id, a.nome_completo)} className="opacity-50 hover:opacity-100" style={{ color: '#C84B31' }} title="Excluir">
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}</AnimatePresence>
+
+      {/* Edit name modal */}
+      <AnimatePresence>{editingName && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 flex items-center justify-center z-50 p-5" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }} onClick={() => setEditingName(null)}>
+          <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} onClick={e => e.stopPropagation()} className="rounded-2xl p-6 max-w-sm w-full" style={{ backgroundColor: '#1A1A1A', border: `1.5px solid ${B}` }}>
+            <h3 className="font-fraunces text-lg mb-1" style={{ color: X }}>Editar nome</h3>
+            <p className="font-dm text-xs mb-4" style={{ color: X3 }}>
+              {editingName.type === 'avaliador' ? 'Avaliador' : 'Avaliado'}: &ldquo;{editingName.nome}&rdquo;
+            </p>
+            <input type="text" value={editNameVal} onChange={e => setEditNameVal(e.target.value)} className="font-dm text-sm w-full px-4 py-3 rounded-xl mb-4" style={{ backgroundColor: 'rgba(253,251,247,0.04)', border: `1.5px solid ${B}`, color: X }} autoFocus onKeyDown={e => e.key === 'Enter' && editName()} />
+            <div className="flex gap-3">
+              <button onClick={editName} className="font-dm text-sm px-5 py-2.5 rounded-xl text-white font-medium" style={{ backgroundColor: T }}>Salvar</button>
+              <button onClick={() => setEditingName(null)} className="font-dm text-sm px-5 py-2.5 rounded-xl" style={{ color: X3 }}>Cancelar</button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}</AnimatePresence>
+
+      {filteredAvaliacoes.length === 0 ? (
         <div className="py-16 text-center rounded-3xl" style={{ border: `1.5px dashed ${B}` }}>
           <svg className="mx-auto mb-4" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke={X3} strokeWidth="1.5" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /></svg>
-          <p className="font-dm text-sm" style={{ color: X3 }}>Nenhuma avaliação registrada.</p>
+          <p className="font-dm text-sm" style={{ color: X3 }}>{avaliacoes.length > 0 ? 'Nenhuma avaliação corresponde aos filtros.' : 'Nenhuma avaliação registrada.'}</p>
         </div>
       ) : (
         <div className="rounded-2xl overflow-hidden" style={{ border: `1.5px solid ${B}` }}>
           {/* Table header */}
           <div className="grid grid-cols-12 gap-2 px-5 py-3" style={{ backgroundColor: 'rgba(253,251,247,0.04)' }}>
             <span className="col-span-2 font-dm text-xs font-bold" style={{ color: X3 }}>Data</span>
-            <span className="col-span-3 font-dm text-xs font-bold" style={{ color: X3 }}>Avaliador</span>
+            <span className="col-span-2 font-dm text-xs font-bold" style={{ color: X3 }}>Avaliador</span>
             <span className="col-span-2 font-dm text-xs font-bold" style={{ color: X3 }}>Avaliado</span>
-            <span className="col-span-3 font-dm text-xs font-bold" style={{ color: X3 }}>Nome/Sessão</span>
-            <span className="col-span-2 font-dm text-xs font-bold text-right" style={{ color: X3 }}>Ações</span>
+            <span className="col-span-2 font-dm text-xs font-bold" style={{ color: X3 }}>Nome/Sessão</span>
+            <span className="col-span-1 font-dm text-xs font-bold text-center" style={{ color: X3 }}>Nota</span>
+            <span className="col-span-3 font-dm text-xs font-bold text-right" style={{ color: X3 }}>Ações</span>
           </div>
 
           {/* Rows */}
-          {avaliacoes.map((a, i) => (
+          {filteredAvaliacoes.map((a) => {
+            const tot = CRITERIOS.reduce((s, c) => s + ((a[c.key as keyof Avaliacao] as number) || 0), 0)
+            return (
             <div key={a.id} className="grid grid-cols-12 gap-2 px-5 py-4 items-center transition-all hover:bg-white/[0.02]" style={{ borderTop: `1px solid ${B}` }}>
               <span className="col-span-2 font-dm text-sm" style={{ color: X2 }}>{fmtDate(a.data)}</span>
-              <span className="col-span-3 font-dm text-sm" style={{ color: X }}>{a.avaliador_nome}</span>
+              <span className="col-span-2 font-dm text-sm" style={{ color: X }}>{a.avaliador_nome}</span>
               <span className="col-span-2 font-dm text-sm" style={{ color: X2 }}>{a.avaliado_nome || 'N/A'}</span>
-              <span className="col-span-3 font-dm text-sm font-medium" style={{ color: X }}>{a.nome_sessao}</span>
-              <div className="col-span-2 flex gap-1.5 justify-end">
+              <span className="col-span-2 font-dm text-sm font-medium" style={{ color: X }}>{a.nome_sessao}</span>
+              <span className="col-span-1 font-dm text-sm font-bold text-center" style={{ color: tot >= 25 ? T : tot >= 0 ? '#1BBAB0' : '#C84B31' }}>{tot > 0 ? '+' : ''}{tot}</span>
+              <div className="col-span-3 flex gap-1.5 justify-end">
                 <button onClick={() => openDetail(a)} className="w-8 h-8 rounded-lg flex items-center justify-center transition-all hover:-translate-y-0.5" style={{ backgroundColor: 'rgba(14,165,160,0.12)' }} title="Ver detalhes">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T} strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
@@ -464,7 +727,8 @@ export default function AvaliacaoTool({ avaliadorNome }: Props) {
                 </button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 

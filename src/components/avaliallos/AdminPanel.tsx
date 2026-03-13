@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import QuadroSemanal from './QuadroSemanal'
 import AtmosphericBg from './AtmosphericBg'
 import AvaliacaoTool from './AvaliacaoTool'
+import StatsPanel from './StatsPanel'
 
 interface Av { id: string; nome: string }
 interface DFx { id: string; avaliador_id: string; avaliadores: Av }
@@ -14,14 +15,15 @@ interface SFx { id: string; dia_semana: string; hora: string; ativo: boolean; av
 interface SAv { id: string; data: string; hora: string; ativo: boolean; max_avaliadores: number; max_avaliados: number; no_formulario: boolean; criado_por: string|null; avaliador_disponibilidade: DAv[]; bookings: BkI[] }
 interface Avdo { id: string; nome_completo: string; telefone: string; ja_participou: boolean; categoria: string; observacoes: string|null; status: string; fixos_escolhidos: string; criado_em: string; bookings: { id: string; slot_id: string; slots: { id: string; data: string; hora: string } }[] }
 interface Msg { id: number; tipo: string; titulo: string; template: string }
-interface AvReg { id: string; nome: string; telefone: string|null; capacidade_semanal: number; observacoes: string|null; criado_em: string; disp_fixos: { id: string; slot_fixo_id: string; slots_fixos: { id: string; dia_semana: string; hora: string } }[]; disp_avulsos: { id: string; slot_id: string; slots: { id: string; data: string; hora: string } }[] }
+interface AvReg { id: string; nome: string; telefone: string|null; capacidade_semanal: number; observacoes: string|null; ativo: boolean; criado_em: string; disp_fixos: { id: string; slot_fixo_id: string; slots_fixos: { id: string; dia_semana: string; hora: string } }[]; disp_avulsos: { id: string; slot_id: string; slots: { id: string; data: string; hora: string } }[] }
 
 const ST: Record<string, { bg: string; tx: string; lb: string }> = {
   aguardando: { bg: 'rgba(212,133,74,0.12)', tx: '#D4854A', lb: 'Aguardando' },
-  em_confirmacao: { bg: 'rgba(27,186,176,0.12)', tx: '#1BBAB0', lb: 'Em confirmação' },
-  confirmado: { bg: 'rgba(14,165,160,0.12)', tx: '#0EA5A0', lb: 'Confirmado' },
+  em_confirmacao: { bg: 'rgba(234,140,0,0.12)', tx: '#EA8C00', lb: 'Em confirmação' },
+  confirmado: { bg: 'rgba(34,197,94,0.12)', tx: '#22c55e', lb: 'Confirmado' },
   remarcar: { bg: 'rgba(139,92,246,0.12)', tx: '#8B5CF6', lb: 'Remarcar' },
   removido: { bg: 'rgba(92,92,92,0.12)', tx: '#5C5C5C', lb: 'Removido' },
+  avaliacao_realizada: { bg: 'rgba(253,251,247,0.04)', tx: 'rgba(253,251,247,0.35)', lb: 'Avaliação já realizada' },
 }
 
 const DIAS: Record<string,string> = { segunda:'Segunda-feira', terca:'Terça-feira', quarta:'Quarta-feira', quinta:'Quinta-feira', sexta:'Sexta-feira', sabado:'Sábado', domingo:'Domingo' }
@@ -29,7 +31,7 @@ const DIAS_ORDER = ['segunda','terca','quarta','quinta','sexta','sabado','doming
 const DIAS_SHORT: Record<string,string> = { segunda:'Seg', terca:'Ter', quarta:'Qua', quinta:'Qui', sexta:'Sex', sabado:'Sáb', domingo:'Dom' }
 const T = '#0EA5A0', C = 'rgba(255,255,255,0.04)', B = 'rgba(255,255,255,0.09)', X = 'rgba(253,251,247,0.95)', X2 = 'rgba(253,251,247,0.55)', X3 = 'rgba(253,251,247,0.32)'
 
-type Tab = 'quadro' | 'avaliadores' | 'fixos' | 'avulsos' | 'fila' | 'avaliacoes' | 'msgs'
+type Tab = 'quadro' | 'avaliadores' | 'fixos' | 'avulsos' | 'fila' | 'avaliacoes' | 'msgs' | 'stats'
 
 export default function AdminPanel() {
   const [tab, setTab] = useState<Tab>('quadro')
@@ -41,6 +43,7 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
+  const [statsKey, setStatsKey] = useState(0)
   const [filtro, setFiltro] = useState<string|null>(null)
   const [busca, setBusca] = useState('')
   const [filtroFixo, setFiltroFixo] = useState<string|null>(null)
@@ -129,6 +132,10 @@ export default function AdminPanel() {
     if (!confirm('Remover avaliador? Isso remove todas as disponibilidades associadas.')) return
     await fetch(`/api/avaliallos/avaliadores?id=${id}`, { method:'DELETE' }); flash('Removido'); fetchAll()
   }
+  const toggleAvalAtivo = async (a: AvReg) => {
+    await fetch('/api/avaliallos/avaliadores', { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ id: a.id, ativo: !a.ativo }) })
+    flash(a.ativo ? 'Desativado' : 'Ativado'); fetchAll()
+  }
 
   const waLink = (tel: string, nome: string, tipo: string, data?: string, hora?: string) => {
     const m = msgs.find(x => x.tipo === tipo); if (!m) return
@@ -190,12 +197,13 @@ export default function AdminPanel() {
       <div className="flex gap-1.5 mb-8 p-1.5 rounded-2xl overflow-x-auto" style={{ background:'rgba(255,255,255,0.03)', border:`1px solid rgba(255,255,255,0.06)`, backdropFilter:'blur(12px)' }}>
         {([
           { k:'quadro' as Tab, l:'Quadro', emoji:'📋' },
-          { k:'avaliadores' as Tab, l:`Avaliadores (${avalReg.length})`, emoji:'👥' },
+          { k:'avaliadores' as Tab, l:`Avaliadores (${avalReg.filter(a => a.ativo !== false).length})`, emoji:'👥' },
           { k:'fixos' as Tab, l:'Fixos', emoji:'🕐' },
           { k:'avulsos' as Tab, l:'Avulsos', emoji:'📅' },
           { k:'fila' as Tab, l:`Fila (${avaliados.length})`, emoji:'📊' },
           { k:'avaliacoes' as Tab, l:'Avaliações', emoji:'📝' },
           { k:'msgs' as Tab, l:'Mensagens', emoji:'💬' },
+          { k:'stats' as Tab, l:'Estatísticas', emoji:'📊' },
         ]).map(t => <button key={t.k} onClick={() => setTab(t.k)} className="font-dm text-xs sm:text-sm flex-1 py-3 rounded-xl transition-all duration-300 font-medium whitespace-nowrap px-2 sm:px-3" style={{ background: tab===t.k ? 'linear-gradient(135deg, rgba(14,165,160,0.15), rgba(14,165,160,0.05))' : 'transparent', color: tab===t.k ? T : X3, border: tab===t.k ? '1px solid rgba(14,165,160,0.2)' : '1px solid transparent', boxShadow: tab===t.k ? '0 2px 12px rgba(14,165,160,0.1)' : 'none' }}>{t.l}</button>)}
       </div>
 
@@ -251,55 +259,73 @@ export default function AdminPanel() {
 
           {avalReg.length === 0 ? (
             <div className="py-16 text-center rounded-3xl" style={{ border:`1.5px dashed ${B}` }}><p className="font-dm text-sm" style={{ color:X3 }}>Nenhum avaliador cadastrado.</p></div>
-          ) : (
-            <div className="space-y-3">
-              {avalReg.map(a => {
-                const fixoLabels = (a.disp_fixos || []).map(d => d.slots_fixos ? `${DIAS_SHORT[d.slots_fixos.dia_semana]} ${d.slots_fixos.hora}` : '?')
-                const avulsoCount = (a.disp_avulsos || []).length
-                return (
-                  <div key={a.id} className="rounded-2xl p-5" style={{ backgroundColor:C, border:`1.5px solid ${B}`, borderLeftWidth:'4px', borderLeftColor:T }}>
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <span className="font-dm text-base font-bold" style={{ color:X }}>{a.nome}</span>
-                          <span className="font-dm text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor:'rgba(14,165,160,0.1)', color:T }}>
-                            {a.capacidade_semanal}/sem
-                          </span>
+          ) : (() => {
+            const ativos = avalReg.filter(a => a.ativo !== false)
+            const inativos = avalReg.filter(a => a.ativo === false)
+            const renderAval = (a: AvReg) => {
+              const isAtivo = a.ativo !== false
+              const fixoLabels = (a.disp_fixos || []).map(d => d.slots_fixos ? `${DIAS_SHORT[d.slots_fixos.dia_semana]} ${d.slots_fixos.hora}` : '?')
+              const avulsoCount = (a.disp_avulsos || []).length
+              return (
+                <div key={a.id} className="rounded-2xl p-5 transition-all" style={{ backgroundColor:C, border:`1.5px solid ${isAtivo ? B : 'rgba(92,92,92,0.08)'}`, borderLeftWidth:'4px', borderLeftColor: isAtivo ? T : 'rgba(92,92,92,0.2)', opacity: isAtivo ? 1 : 0.55 }}>
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="font-dm text-base font-bold" style={{ color: isAtivo ? X : X3 }}>{a.nome}</span>
+                        <span className="font-dm text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: isAtivo ? 'rgba(14,165,160,0.1)' : 'rgba(92,92,92,0.1)', color: isAtivo ? T : '#5C5C5C' }}>
+                          {a.capacidade_semanal}/sem
+                        </span>
+                        {!isAtivo && <span className="font-dm text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor:'rgba(92,92,92,0.1)', color:'#5C5C5C' }}>Desativado</span>}
+                      </div>
+
+                      {a.telefone && (
+                        <a href={`https://wa.me/${a.telefone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="font-dm text-xs inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl mb-2 transition-all hover:-translate-y-0.5" style={{ backgroundColor:'#25D36620', color:'#25D366' }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                          {a.telefone}
+                        </a>
+                      )}
+
+                      {fixoLabels.length > 0 && (
+                        <div className="mb-1.5">
+                          <span className="font-dm text-xs" style={{ color:X3 }}>Fixos marcados: </span>
+                          {fixoLabels.map((l,i) => <span key={i} className="font-dm text-xs px-2 py-0.5 rounded-full mr-1" style={{ backgroundColor:'rgba(14,165,160,0.08)', color:T }}>{l}</span>)}
                         </div>
+                      )}
 
-                        {a.telefone && (
-                          <a href={`https://wa.me/${a.telefone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="font-dm text-xs inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl mb-2 transition-all hover:-translate-y-0.5" style={{ backgroundColor:'#25D36620', color:'#25D366' }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                            {a.telefone}
-                          </a>
-                        )}
+                      {avulsoCount > 0 && (
+                        <p className="font-dm text-xs" style={{ color:'#D4854A' }}>{avulsoCount} avulso(s) marcado(s)</p>
+                      )}
 
-                        {fixoLabels.length > 0 && (
-                          <div className="mb-1.5">
-                            <span className="font-dm text-xs" style={{ color:X3 }}>Fixos marcados: </span>
-                            {fixoLabels.map((l,i) => <span key={i} className="font-dm text-xs px-2 py-0.5 rounded-full mr-1" style={{ backgroundColor:'rgba(14,165,160,0.08)', color:T }}>{l}</span>)}
-                          </div>
-                        )}
+                      {a.observacoes && (
+                        <p className="font-dm text-xs mt-1.5 italic" style={{ color:X3 }}>&ldquo;{a.observacoes}&rdquo;</p>
+                      )}
+                    </div>
 
-                        {avulsoCount > 0 && (
-                          <p className="font-dm text-xs" style={{ color:'#D4854A' }}>{avulsoCount} avulso(s) marcado(s)</p>
-                        )}
-
-                        {a.observacoes && (
-                          <p className="font-dm text-xs mt-1.5 italic" style={{ color:X3 }}>&ldquo;{a.observacoes}&rdquo;</p>
-                        )}
-                      </div>
-
-                      <div className="flex gap-2 shrink-0">
-                        <button onClick={() => { setEditingAval(a); setEditAval({ nome: a.nome, telefone: a.telefone || '', capacidade_semanal: a.capacidade_semanal, observacoes: a.observacoes || '' }) }} className="font-dm text-xs px-3 py-2 rounded-xl font-medium" style={{ backgroundColor:'rgba(14,165,160,0.08)', color:T }}>Editar</button>
-                        <button onClick={() => delAvalReg(a.id)} className="font-dm text-xs px-3 py-2 rounded-xl font-medium" style={{ backgroundColor:'rgba(200,75,49,0.06)', color:'#C84B31' }}>Excluir</button>
-                      </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button onClick={() => toggleAvalAtivo(a)} className="font-dm text-xs px-3 py-2 rounded-xl font-medium" style={{ backgroundColor: isAtivo ? 'rgba(92,92,92,0.08)' : 'rgba(14,165,160,0.08)', color: isAtivo ? '#5C5C5C' : T }}>{isAtivo ? 'Desativar' : 'Ativar'}</button>
+                      <button onClick={() => { setEditingAval(a); setEditAval({ nome: a.nome, telefone: a.telefone || '', capacidade_semanal: a.capacidade_semanal, observacoes: a.observacoes || '' }) }} className="font-dm text-xs px-3 py-2 rounded-xl font-medium" style={{ backgroundColor:'rgba(14,165,160,0.08)', color:T }}>Editar</button>
+                      <button onClick={() => delAvalReg(a.id)} className="font-dm text-xs px-3 py-2 rounded-xl font-medium" style={{ backgroundColor:'rgba(200,75,49,0.06)', color:'#C84B31' }}>Excluir</button>
                     </div>
                   </div>
-                )
-              })}
-            </div>
-          )}
+                </div>
+              )
+            }
+            return (
+              <div className="space-y-3">
+                {ativos.map(renderAval)}
+                {inativos.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-3 pt-4">
+                      <div className="flex-1 h-px" style={{ backgroundColor:B }} />
+                      <span className="font-dm text-xs font-medium" style={{ color:'#5C5C5C' }}>Desativados ({inativos.length})</span>
+                      <div className="flex-1 h-px" style={{ backgroundColor:B }} />
+                    </div>
+                    {inativos.map(renderAval)}
+                  </>
+                )}
+              </div>
+            )
+          })()}
         </div>
 
       ) : tab === 'fixos' ? (
@@ -499,7 +525,11 @@ export default function AdminPanel() {
 
       ) : tab === 'avaliacoes' ? (
         /* ===== AVALIAÇÕES ===== */
-        <AvaliacaoTool key={refreshKey} avaliadorNome="Admin" />
+        <AvaliacaoTool key={refreshKey} avaliadorNome="Admin" onDataChange={() => setStatsKey(k => k + 1)} />
+
+      ) : tab === 'stats' ? (
+        /* ===== ESTATÍSTICAS ===== */
+        <StatsPanel key={statsKey} isAdmin />
 
       ) : (
         /* ===== MENSAGENS ===== */

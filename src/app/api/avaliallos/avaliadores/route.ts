@@ -25,6 +25,26 @@ export async function POST(req: NextRequest) {
   const sb = getSupabaseAdmin()
   const body = await req.json()
 
+  // Merge action: move all avaliacoes from source to target, then delete source
+  if (body.action === 'merge') {
+    const { source_id, target_id } = body
+    if (!source_id || !target_id) return NextResponse.json({ error: 'source_id e target_id necessários' }, { status: 400 })
+
+    // Update all avaliacoes pointing to source
+    const { error: e1, count } = await sb.from('avaliacoes').update({ avaliador_id: target_id }, { count: 'exact' }).eq('avaliador_id', source_id)
+    if (e1) return NextResponse.json({ error: e1.message }, { status: 500 })
+
+    // Update disponibilidades
+    await sb.from('avaliador_disp_fixo').update({ avaliador_id: target_id }).eq('avaliador_id', source_id)
+    await sb.from('avaliador_disponibilidade').update({ avaliador_id: target_id }).eq('avaliador_id', source_id)
+
+    // Delete source avaliador
+    const { error: e2 } = await sb.from('avaliadores').delete().eq('id', source_id)
+    if (e2) return NextResponse.json({ error: e2.message }, { status: 500 })
+
+    return NextResponse.json({ success: true, merged_avaliacoes: count })
+  }
+
   let telefone = body.telefone?.replace(/\D/g, '') || ''
   if (telefone && !telefone.startsWith('+')) {
     telefone = telefone.startsWith('55') ? '+' + telefone : '+55' + telefone
