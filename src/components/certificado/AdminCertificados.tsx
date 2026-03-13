@@ -32,6 +32,7 @@ interface Atividade {
   id: string
   nome: string
   ativo: boolean
+  carga_horaria: number
 }
 
 interface Condutor {
@@ -103,6 +104,10 @@ export default function AdminCertificados() {
 
   // Atividades state
   const [newAtividade, setNewAtividade] = useState('')
+  const [newAtividadeHoras, setNewAtividadeHoras] = useState(2)
+  const [editingAtividade, setEditingAtividade] = useState<Atividade | null>(null)
+  const [editAtividadeNome, setEditAtividadeNome] = useState('')
+  const [editAtividadeHoras, setEditAtividadeHoras] = useState(2)
 
   // Import CSV state
   const [importing, setImporting] = useState(false)
@@ -245,10 +250,19 @@ export default function AdminCertificados() {
   // ─── CRUD: Atividades ──────────────────────────────────────────
   async function addAtividade() {
     if (!newAtividade.trim()) return
-    await adminApi({ action: 'create_atividade', nome: newAtividade.trim() })
+    await adminApi({ action: 'create_atividade', nome: newAtividade.trim(), carga_horaria: newAtividadeHoras })
     setNewAtividade('')
+    setNewAtividadeHoras(2)
     loadData()
     showToast('Atividade adicionada')
+  }
+
+  async function updateAtividade() {
+    if (!editingAtividade) return
+    await adminApi({ action: 'update_atividade', id: editingAtividade.id, nome: editAtividadeNome.trim(), carga_horaria: editAtividadeHoras })
+    setEditingAtividade(null)
+    loadData()
+    showToast('Atividade atualizada')
   }
 
   async function toggleAtividade(id: string, ativo: boolean) {
@@ -757,6 +771,11 @@ export default function AdminCertificados() {
                   placeholder="Nova atividade..." onKeyDown={e => e.key === 'Enter' && addAtividade()}
                   className="font-dm flex-1 px-4 py-3 rounded-xl text-sm outline-none"
                   style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }} />
+                <input type="number" value={newAtividadeHoras} onChange={e => setNewAtividadeHoras(Number(e.target.value) || 2)} min={1} max={100}
+                  className="font-dm w-20 px-3 py-3 rounded-xl text-sm outline-none text-center"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(253,251,247,0.9)' }}
+                  title="Carga horária" />
+                <span className="font-dm text-xs self-center" style={{ color: 'rgba(253,251,247,0.3)' }}>h</span>
                 <button onClick={addAtividade} className="px-4 py-3 rounded-xl" style={{ backgroundColor: '#C84B31', color: '#fff' }}>
                   <Plus size={16} />
                 </button>
@@ -768,28 +787,57 @@ export default function AdminCertificados() {
               </div>
               <p className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.25)' }}>
                 <Eye size={11} className="inline mb-0.5" style={{ color: '#C84B31' }} /> = publicada no formulário de certificação &nbsp;
-                <EyeOff size={11} className="inline mb-0.5" /> = oculta (não aparece no formulário)
+                <EyeOff size={11} className="inline mb-0.5" /> = oculta (não aparece no formulário) &nbsp;
+                Certificados são cumulativos por tipo de atividade. Mínimo de 30h totais para liberar.
               </p>
               <div className="space-y-2">
                 {atividades.map(a => {
                   const feedbackCount = submissions.filter(s => s.atividade_nome === a.nome).length
+                  const isEditing = editingAtividade?.id === a.id
                   return (
                   <div key={a.id} className="flex items-center gap-3 p-3 rounded-xl"
                     style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}>
-                    <span className="font-dm text-sm flex-1" style={{ color: a.ativo ? 'rgba(253,251,247,0.7)' : 'rgba(253,251,247,0.25)' }}>{a.nome}</span>
-                    {feedbackCount > 0 && (
-                      <span className="font-dm text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(200,75,49,0.08)', color: 'rgba(200,75,49,0.6)' }}>
-                        {feedbackCount} feedback{feedbackCount > 1 ? 's' : ''}
-                      </span>
+                    {isEditing ? (
+                      <>
+                        <input value={editAtividadeNome} onChange={e => setEditAtividadeNome(e.target.value)}
+                          className="font-dm flex-1 px-3 py-2 rounded-lg text-sm outline-none"
+                          style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(200,75,49,0.3)', color: 'rgba(253,251,247,0.9)' }} />
+                        <input type="number" value={editAtividadeHoras} onChange={e => setEditAtividadeHoras(Number(e.target.value) || 2)} min={1} max={100}
+                          className="font-dm w-16 px-2 py-2 rounded-lg text-sm outline-none text-center"
+                          style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(200,75,49,0.3)', color: 'rgba(253,251,247,0.9)' }} />
+                        <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.3)' }}>h</span>
+                        <button onClick={updateAtividade} className="font-dm text-xs px-3 py-1.5 rounded-lg" style={{ backgroundColor: 'rgba(200,75,49,0.15)', color: '#C84B31' }}>
+                          <Check size={14} />
+                        </button>
+                        <button onClick={() => setEditingAtividade(null)} className="font-dm text-xs px-3 py-1.5 rounded-lg" style={{ color: 'rgba(253,251,247,0.3)' }}>
+                          <X size={14} />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-dm text-sm flex-1" style={{ color: a.ativo ? 'rgba(253,251,247,0.7)' : 'rgba(253,251,247,0.25)' }}>{a.nome}</span>
+                        <span className="font-dm text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(200,75,49,0.08)', color: 'rgba(200,75,49,0.5)' }}>
+                          {a.carga_horaria || 2}h
+                        </span>
+                        {feedbackCount > 0 && (
+                          <span className="font-dm text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(200,75,49,0.08)', color: 'rgba(200,75,49,0.6)' }}>
+                            {feedbackCount} feedback{feedbackCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                        <button onClick={() => { setEditingAtividade(a); setEditAtividadeNome(a.nome); setEditAtividadeHoras(a.carga_horaria || 2) }} className="p-1.5 rounded-lg"
+                          style={{ color: 'rgba(253,251,247,0.3)' }}>
+                          <Edit3 size={14} />
+                        </button>
+                        <button onClick={() => toggleAtividade(a.id, a.ativo)} className="p-1.5 rounded-lg"
+                          style={{ color: a.ativo ? '#C84B31' : 'rgba(253,251,247,0.2)' }}>
+                          {a.ativo ? <Eye size={14} /> : <EyeOff size={14} />}
+                        </button>
+                        <button onClick={() => confirmDeleteAtividade(a.id, a.nome)} className="p-1.5 rounded-lg hover:bg-red-500/10"
+                          style={{ color: 'rgba(253,251,247,0.15)' }}>
+                          <Trash2 size={14} />
+                        </button>
+                      </>
                     )}
-                    <button onClick={() => toggleAtividade(a.id, a.ativo)} className="p-1.5 rounded-lg"
-                      style={{ color: a.ativo ? '#C84B31' : 'rgba(253,251,247,0.2)' }}>
-                      {a.ativo ? <Eye size={14} /> : <EyeOff size={14} />}
-                    </button>
-                    <button onClick={() => confirmDeleteAtividade(a.id, a.nome)} className="p-1.5 rounded-lg hover:bg-red-500/10"
-                      style={{ color: 'rgba(253,251,247,0.15)' }}>
-                      <Trash2 size={14} />
-                    </button>
                   </div>
                   )
                 })}

@@ -140,16 +140,16 @@ export default function FormAvaliado() {
   }
 
   return (
-    <div className="max-w-xl mx-auto px-5">
+    <div className="max-w-xl mx-auto px-4 sm:px-5">
       {/* Hero */}
-      <div className="pt-20 pb-10 text-center">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-center mb-6">
-          <span className="font-dm text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(14,165,160,0.1)', color: '#0EA5A0' }}>AvaliAllos · Associação Allos</span>
+      <div className="pt-16 sm:pt-20 pb-8 sm:pb-10 text-center">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex justify-center mb-5 sm:mb-6">
+          <span className="font-dm text-[10px] sm:text-xs font-bold tracking-widest uppercase px-3 sm:px-4 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(14,165,160,0.1)', color: '#0EA5A0' }}>AvaliAllos · Associação Allos</span>
         </motion.div>
-        <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="font-fraunces text-4xl md:text-5xl mb-5 leading-tight" style={{ color: 'rgba(253,251,247,0.95)' }}>
+        <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="font-fraunces text-3xl sm:text-4xl md:text-5xl mb-4 sm:mb-5 leading-tight" style={{ color: 'rgba(253,251,247,0.95)' }}>
           Agende sua <br className="sm:hidden" /><em className="italic" style={{ color: '#0EA5A0' }}>avaliação</em>
         </motion.h1>
-        <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="font-dm text-base max-w-md mx-auto leading-relaxed" style={{ color: 'rgba(253,251,247,0.4)' }}>
+        <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="font-dm text-sm sm:text-base max-w-md mx-auto leading-relaxed px-2" style={{ color: 'rgba(253,251,247,0.4)' }}>
           Preencha o formulário e escolha seu horário de preferência. Nossa equipe entrará em contato para confirmar.
         </motion.p>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="flex items-center justify-center mt-8 gap-3">
@@ -199,7 +199,7 @@ export default function FormAvaliado() {
           <label className="font-dm text-sm font-semibold block mb-3" style={{ color: 'rgba(253,251,247,0.7)' }}>Categoria</label>
           <div className="space-y-2.5">
             {CATEGORIAS.map(cat => { const sel = form.categoria === cat; return (
-              <button key={cat} type="button" onClick={() => setForm({ ...form, categoria: cat })} className="font-dm text-sm w-full text-left px-5 py-3.5 rounded-2xl transition-all" style={{ backgroundColor: sel ? 'rgba(14,165,160,0.1)' : 'rgba(253,251,247,0.03)', color: sel ? '#1BBAB0' : 'rgba(253,251,247,0.5)', border: `1.5px solid ${sel ? 'rgba(14,165,160,0.3)' : 'rgba(253,251,247,0.08)'}`, borderLeftWidth: sel ? '4px' : '1.5px', borderLeftColor: sel ? '#0EA5A0' : 'rgba(253,251,247,0.08)', fontWeight: sel ? 600 : 400 }}>{cat}</button>
+              <button key={cat} type="button" onClick={() => setForm({ ...form, categoria: cat })} className="font-dm text-xs sm:text-sm w-full text-left px-4 sm:px-5 py-3 sm:py-3.5 rounded-2xl transition-all" style={{ backgroundColor: sel ? 'rgba(14,165,160,0.1)' : 'rgba(253,251,247,0.03)', color: sel ? '#1BBAB0' : 'rgba(253,251,247,0.5)', border: `1.5px solid ${sel ? 'rgba(14,165,160,0.3)' : 'rgba(253,251,247,0.08)'}`, borderLeftWidth: sel ? '4px' : '1.5px', borderLeftColor: sel ? '#0EA5A0' : 'rgba(253,251,247,0.08)', fontWeight: sel ? 600 : 400 }}>{cat}</button>
             )})}
           </div>
         </motion.div>
@@ -223,7 +223,7 @@ export default function FormAvaliado() {
                     {fixosByDia[dia].sort((a, b) => a.hora.localeCompare(b.hora)).map(slot => {
                       const sel = form.fixos_ids.includes(slot.id)
                       return (
-                        <button key={slot.id} type="button" onClick={() => toggleFixo(slot.id)} className="font-dm text-sm px-5 py-3 rounded-2xl transition-all font-medium" style={{ backgroundColor: sel ? 'rgba(14,165,160,0.15)' : 'rgba(253,251,247,0.04)', color: sel ? '#fff' : 'rgba(253,251,247,0.6)', border: `1.5px solid ${sel ? 'rgba(14,165,160,0.5)' : 'rgba(253,251,247,0.1)'}`, boxShadow: sel ? '0 0 20px rgba(14,165,160,0.15)' : 'none' }}>
+                        <button key={slot.id} type="button" onClick={() => toggleFixo(slot.id)} className="font-dm text-xs sm:text-sm px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl transition-all font-medium" style={{ backgroundColor: sel ? 'rgba(14,165,160,0.15)' : 'rgba(253,251,247,0.04)', color: sel ? '#fff' : 'rgba(253,251,247,0.6)', border: `1.5px solid ${sel ? 'rgba(14,165,160,0.5)' : 'rgba(253,251,247,0.1)'}`, boxShadow: sel ? '0 0 20px rgba(14,165,160,0.15)' : 'none' }}>
                           {slot.hora} {sel && '✓'}
                         </button>
                       )
@@ -252,7 +252,7 @@ export default function FormAvaliado() {
                       {slots.sort((a, b) => a.hora.localeCompare(b.hora)).map(slot => {
                         const sel = form.avulso_slot_id === slot.id
                         return (
-                          <button key={slot.id} type="button" onClick={() => setForm({ ...form, avulso_slot_id: sel ? '' : slot.id })} className="font-dm text-sm px-5 py-3 rounded-2xl transition-all font-medium" style={{ backgroundColor: sel ? 'rgba(200,75,49,0.15)' : 'rgba(253,251,247,0.04)', color: sel ? '#fff' : 'rgba(253,251,247,0.6)', border: `1.5px solid ${sel ? 'rgba(200,75,49,0.4)' : 'rgba(253,251,247,0.1)'}` }}>
+                          <button key={slot.id} type="button" onClick={() => setForm({ ...form, avulso_slot_id: sel ? '' : slot.id })} className="font-dm text-xs sm:text-sm px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl transition-all font-medium" style={{ backgroundColor: sel ? 'rgba(200,75,49,0.15)' : 'rgba(253,251,247,0.04)', color: sel ? '#fff' : 'rgba(253,251,247,0.6)', border: `1.5px solid ${sel ? 'rgba(200,75,49,0.4)' : 'rgba(253,251,247,0.1)'}` }}>
                             {slot.hora} {sel && '✓'}
                           </button>
                         )
@@ -276,7 +276,7 @@ export default function FormAvaliado() {
         </AnimatePresence>
 
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <button type="submit" disabled={submitting || !form.nome_completo || !form.telefone || !form.categoria || form.fixos_ids.length === 0} className="font-dm w-full py-4 rounded-2xl text-white text-sm font-bold tracking-wide transition-all hover:-translate-y-1 disabled:opacity-30 disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #C84B31, #D4854A)', boxShadow: '0 6px 25px rgba(200,75,49,0.25)' }}>
+          <button type="submit" disabled={submitting || !form.nome_completo || !form.telefone || !form.categoria || form.fixos_ids.length === 0} className="font-dm w-full py-3.5 sm:py-4 rounded-2xl text-white text-sm font-bold tracking-wide transition-all hover:-translate-y-1 disabled:opacity-30 disabled:cursor-not-allowed" style={{ background: 'linear-gradient(135deg, #C84B31, #D4854A)', boxShadow: '0 6px 25px rgba(200,75,49,0.25)' }}>
             {submitting ? 'Enviando...' : 'Enviar inscrição'}
           </button>
         </motion.div>

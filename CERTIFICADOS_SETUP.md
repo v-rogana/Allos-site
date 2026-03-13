@@ -13,8 +13,13 @@ CREATE TABLE certificado_atividades (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   nome TEXT NOT NULL,
   ativo BOOLEAN DEFAULT true,
+  carga_horaria INTEGER DEFAULT 2,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- MIGRAÇÃO: Se a tabela já existe, adicione as colunas:
+-- ALTER TABLE certificado_atividades ADD COLUMN IF NOT EXISTS carga_horaria INTEGER DEFAULT 2;
+-- ALTER TABLE certificado_submissions ADD COLUMN IF NOT EXISTS certificado_resgatado BOOLEAN DEFAULT false;
 
 -- Condutores dos grupos
 CREATE TABLE certificado_condutores (

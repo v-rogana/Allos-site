@@ -135,6 +135,17 @@ export default function StatsPanel({ isAdmin }: { isAdmin?: boolean }) {
     }
     catCorrelations.sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
 
+    // Competency correlations (pearson between individual competencies)
+    const compCorrelations: { a: string; b: string; r: number; catA: string; catB: string }[] = []
+    for (let i = 0; i < CRITERIOS.length; i++) {
+      for (let j = i + 1; j < CRITERIOS.length; j++) {
+        const xs = avaliacoes.map(a => (a[CRITERIOS[i].key] as number) || 0)
+        const ys = avaliacoes.map(a => (a[CRITERIOS[j].key] as number) || 0)
+        compCorrelations.push({ a: CRITERIOS[i].label, b: CRITERIOS[j].label, r: pearson(xs, ys), catA: CRITERIOS[i].cat, catB: CRITERIOS[j].cat })
+      }
+    }
+    compCorrelations.sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
+
     // Evaluator comparison (bias analysis)
     const byEvaluator = new Map<string, Avaliacao[]>()
     avaliacoes.forEach(a => {
@@ -186,7 +197,7 @@ export default function StatsPanel({ isAdmin }: { isAdmin?: boolean }) {
       count: totals.filter(t => t >= b.min && t <= b.max).length,
     }))
 
-    return { n, avgTotal, minTotal, maxTotal, passCount, scoreDist, totalScores, critStats, worst3, best3, catStats, catCorrelations, evaluatorStats, hist, avaliadoStats, uniqueAvaliados }
+    return { n, avgTotal, minTotal, maxTotal, passCount, scoreDist, totalScores, critStats, worst3, best3, catStats, catCorrelations, compCorrelations, evaluatorStats, hist, avaliadoStats, uniqueAvaliados }
   }, [avaliacoes])
 
   if (loading) return <div className="py-16 text-center"><div className="w-8 h-8 rounded-full border-2 border-t-transparent mx-auto animate-spin" style={{ borderColor: B, borderTopColor: 'transparent' }} /></div>
@@ -359,6 +370,35 @@ export default function StatsPanel({ isAdmin }: { isAdmin?: boolean }) {
                 </div>
                 <span className="font-dm text-xs font-bold w-12 text-right" style={{ color }}>{c.r.toFixed(2)}</span>
                 <span className="font-dm text-[10px] px-2 py-0.5 rounded-full" style={{ backgroundColor: `${color}15`, color }}>{label}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Competency correlations */}
+      <div className="rounded-2xl p-6" style={{ backgroundColor: C, border: `1.5px solid ${B}` }}>
+        <h3 className="font-fraunces text-lg mb-1" style={{ color: X }}>Correlações entre Competências</h3>
+        <p className="font-dm text-xs mb-4" style={{ color: X3 }}>Coeficiente de Pearson entre competências individuais (top 20 mais fortes)</p>
+        <div className="space-y-2">
+          {stats.compCorrelations.slice(0, 20).map(c => {
+            const abs = Math.abs(c.r)
+            const color = abs > 0.7 ? T : abs > 0.4 ? '#D4854A' : X3
+            const label = abs > 0.7 ? 'Forte' : abs > 0.4 ? 'Moderada' : 'Fraca'
+            return (
+              <div key={`${c.a}-${c.b}`} className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ backgroundColor: 'rgba(253,251,247,0.015)' }}>
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: CATS[c.catA]?.c }} />
+                  <span className="font-dm text-xs truncate" style={{ color: X2 }}>{c.a}</span>
+                  <span className="font-dm text-xs flex-shrink-0" style={{ color: X3 }}>↔</span>
+                  <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: CATS[c.catB]?.c }} />
+                  <span className="font-dm text-xs truncate" style={{ color: X2 }}>{c.b}</span>
+                </div>
+                <div className="w-24 h-2 rounded-full overflow-hidden flex-shrink-0" style={{ backgroundColor: 'rgba(253,251,247,0.04)' }}>
+                  <div className="h-full rounded-full" style={{ width: `${abs * 100}%`, backgroundColor: `${color}60` }} />
+                </div>
+                <span className="font-dm text-xs font-bold w-12 text-right flex-shrink-0" style={{ color }}>{c.r.toFixed(2)}</span>
+                <span className="font-dm text-[10px] px-2 py-0.5 rounded-full flex-shrink-0" style={{ backgroundColor: `${color}15`, color }}>{label}</span>
               </div>
             )
           })}

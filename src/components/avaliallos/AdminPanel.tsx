@@ -137,9 +137,12 @@ export default function AdminPanel() {
     flash(a.ativo ? 'Desativado' : 'Ativado'); fetchAll()
   }
 
+  const REAPROVEITAR_DEFAULT = 'Olá, {nome}! Tudo bem? 😊\n\nEstamos entrando em contato porque gostaríamos de convidá-lo(a) para realizar uma nova avaliação no AvaliAllos.\n\nNeste momento, estamos priorizando pessoas que já passaram por uma primeira avaliação para tentarem novamente — e seria ótimo contar com a sua participação!\n\nSe tiver interesse, é só acessar o link abaixo e escolher um horário:\n{link}\n\nQualquer dúvida, estamos à disposição!'
   const waLink = (tel: string, nome: string, tipo: string, data?: string, hora?: string) => {
-    const m = msgs.find(x => x.tipo === tipo); if (!m) return
-    const t = m.template.replace(/{nome}/g, nome).replace(/{data}/g, data||'').replace(/{hora}/g, hora||'').replace(/{link}/g, typeof window !== 'undefined' ? `${window.location.origin}/avaliallos` : '')
+    const m = msgs.find(x => x.tipo === tipo)
+    const template = m ? m.template : (tipo === 'reaproveitar' ? REAPROVEITAR_DEFAULT : '')
+    if (!template) return
+    const t = template.replace(/{nome}/g, nome).replace(/{data}/g, data||'').replace(/{hora}/g, hora||'').replace(/{link}/g, typeof window !== 'undefined' ? `${window.location.origin}/avaliallos` : '')
     const num = tel.replace(/\D/g, '')
     window.open(`https://wa.me/${num}?text=${encodeURIComponent(t)}`, '_blank')
   }
@@ -151,6 +154,7 @@ export default function AdminPanel() {
   }
 
   const filtered = avaliados.filter(a => {
+    if (!a.telefone || a.telefone.replace(/\D/g, '').length < 8) return false
     if (filtro && a.status !== filtro) return false
     if (busca) {
       const q = busca.toLowerCase()
@@ -200,7 +204,7 @@ export default function AdminPanel() {
           { k:'avaliadores' as Tab, l:`Avaliadores (${avalReg.filter(a => a.ativo !== false).length})`, emoji:'👥' },
           { k:'fixos' as Tab, l:'Fixos', emoji:'🕐' },
           { k:'avulsos' as Tab, l:'Avulsos', emoji:'📅' },
-          { k:'fila' as Tab, l:`Fila (${avaliados.length})`, emoji:'📊' },
+          { k:'fila' as Tab, l:`Fila (${avaliados.filter(a => a.telefone && a.telefone.replace(/\D/g, '').length >= 8).length})`, emoji:'📊' },
           { k:'avaliacoes' as Tab, l:'Avaliações', emoji:'📝' },
           { k:'msgs' as Tab, l:'Mensagens', emoji:'💬' },
           { k:'stats' as Tab, l:'Estatísticas', emoji:'📊' },
@@ -458,9 +462,9 @@ export default function AdminPanel() {
           </div>
 
           {/* Filtro por status */}
-          <div className="flex flex-wrap gap-2 mb-3">
-            <button onClick={() => setFiltro(null)} className="font-dm text-xs px-3.5 py-2 rounded-xl font-medium" style={{ backgroundColor: !filtro ? X : C, color: !filtro ? '#1A1A1A' : X3 }}>Todos ({avaliados.length})</button>
-            {Object.entries(ST).map(([k,v]) => { const c = sCounts[k]||0; if (!c) return null; return <button key={k} onClick={() => setFiltro(filtro===k?null:k)} className="font-dm text-xs px-3.5 py-2 rounded-xl font-medium transition-all" style={{ backgroundColor: filtro===k ? v.tx : v.bg, color: filtro===k ? '#fff' : v.tx }}>{v.lb} ({c})</button> })}
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-3">
+            <button onClick={() => setFiltro(null)} className="font-dm text-[11px] sm:text-xs px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl font-medium" style={{ backgroundColor: !filtro ? X : C, color: !filtro ? '#1A1A1A' : X3 }}>Todos ({avaliados.length})</button>
+            {Object.entries(ST).map(([k,v]) => { const c = sCounts[k]||0; if (!c) return null; return <button key={k} onClick={() => setFiltro(filtro===k?null:k)} className="font-dm text-[11px] sm:text-xs px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl font-medium transition-all" style={{ backgroundColor: filtro===k ? v.tx : v.bg, color: filtro===k ? '#fff' : v.tx }}>{v.lb} ({c})</button> })}
           </div>
 
           {/* Filtro por horário fixo */}
@@ -487,34 +491,74 @@ export default function AdminPanel() {
             <div className="py-16 text-center rounded-3xl" style={{ border:`1.5px dashed ${B}` }}><p className="font-dm text-sm" style={{ color:X3 }}>Nenhum candidato.</p></div>
           ) : (
             <div className="space-y-3">
-              {filtered.map(a => { const bk = a.bookings?.[0]; const sc = ST[a.status]||ST.aguardando; let fxLabels: string[] = []; try { fxLabels = JSON.parse(a.fixos_escolhidos||'[]').map((id:string) => getFixoLabel(id)) } catch {} return (
-                <motion.div key={a.id} layout className="rounded-2xl p-5" style={{ backgroundColor:C, border:`1.5px solid ${B}`, borderLeftWidth:'4px', borderLeftColor:sc.tx }}>
-                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <span className="font-dm text-base font-bold" style={{ color:X }}>{a.nome_completo}</span>
-                        <span className="font-dm text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor:sc.bg, color:sc.tx }}>{sc.lb}</span>
-                      </div>
-                      <p className="font-dm text-xs mb-1" style={{ color:X2 }}>{a.categoria}</p>
-                      {fxLabels.length > 0 && <p className="font-dm text-xs" style={{ color:T }}>Disponibilidade: {fxLabels.join(', ')}</p>}
-                      {bk?.slots && <p className="font-dm text-xs font-medium" style={{ color:'#D4854A' }}>Alocado: {fmtD(bk.slots.data)} às {bk.slots.hora}</p>}
-                      {a.ja_participou && <p className="font-dm text-xs" style={{ color:'#8B5CF6' }}>Já participou de grupo</p>}
-                      {a.observacoes && <p className="font-dm text-xs mt-1 italic" style={{ color:X3 }}>&ldquo;{a.observacoes}&rdquo;</p>}
-
-                      <div className="flex items-center gap-2 mt-3 flex-wrap">
-                        {/* 3 mensagens WhatsApp */}
-                        {['confirmacao','cobranca','remocao'].map(tipo => {
-                          const col: Record<string,string> = { confirmacao:'#25D366', cobranca:'#D4854A', remocao:'#C84B31' }
-                          const lb: Record<string,string> = { confirmacao:'✓ Confirmar', cobranca:'⏰ Cobrar', remocao:'✕ Remover' }
-                          return <button key={tipo} onClick={() => waLink(a.telefone, a.nome_completo, tipo, bk?.slots?.data, bk?.slots?.hora)} className="font-dm text-xs px-3 py-1.5 rounded-xl font-medium transition-all hover:-translate-y-0.5 cursor-pointer" style={{ backgroundColor:`${col[tipo]}20`, color:col[tipo] }}>{lb[tipo]}</button>
-                        })}
-                        {!bk && <button onClick={() => setAssigning(a)} className="font-dm text-xs px-3 py-1.5 rounded-xl font-medium text-white transition-all hover:-translate-y-0.5 inline-flex items-center gap-1" style={{ backgroundColor:T }}><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>Alocar</button>}
-                        {bk && <button onClick={() => rmBooking(bk.id)} className="font-dm text-xs px-3 py-1.5 rounded-xl font-medium" style={{ color:'#C84B31', backgroundColor:'rgba(200,75,49,0.06)' }}>Desalocar</button>}
+              {/* Sort: active statuses first, then removido/avaliacao_realizada at bottom */}
+              {[...filtered].sort((a, b) => {
+                const inactiveA = a.status === 'removido' || a.status === 'avaliacao_realizada' ? 1 : 0
+                const inactiveB = b.status === 'removido' || b.status === 'avaliacao_realizada' ? 1 : 0
+                return inactiveA - inactiveB
+              }).map(a => {
+                const bk = a.bookings?.[0]; const sc = ST[a.status]||ST.aguardando
+                let fxLabels: string[] = []; try { fxLabels = JSON.parse(a.fixos_escolhidos||'[]').map((id:string) => getFixoLabel(id)) } catch {}
+                const isDone = a.status === 'removido' || a.status === 'avaliacao_realizada'
+                return (
+                <motion.div key={a.id} layout className="rounded-2xl p-4 sm:p-5 transition-all" style={{
+                  backgroundColor: isDone ? 'rgba(255,255,255,0.015)' : C,
+                  border: `1.5px solid ${isDone ? 'rgba(255,255,255,0.04)' : B}`,
+                  borderLeftWidth: '4px',
+                  borderLeftColor: sc.tx,
+                  opacity: isDone ? 0.5 : 1,
+                }}>
+                  <div className="flex flex-col gap-3">
+                    {/* Header: name + status */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="font-dm text-sm sm:text-base font-bold truncate" style={{ color: isDone ? X3 : X }}>{a.nome_completo}</span>
+                          <span className="font-dm text-[10px] sm:text-xs px-2 sm:px-2.5 py-0.5 rounded-full font-medium whitespace-nowrap" style={{ backgroundColor:sc.bg, color:sc.tx }}>{sc.lb}</span>
+                        </div>
+                        <p className="font-dm text-[11px] sm:text-xs mb-0.5" style={{ color: isDone ? X3 : X2 }}>{a.categoria}</p>
+                        {fxLabels.length > 0 && <p className="font-dm text-[11px] sm:text-xs" style={{ color:T }}>Disponibilidade: {fxLabels.join(', ')}</p>}
+                        {bk?.slots && <p className="font-dm text-[11px] sm:text-xs font-medium" style={{ color:'#D4854A' }}>Alocado: {fmtD(bk.slots.data)} às {bk.slots.hora}</p>}
+                        {a.ja_participou && <p className="font-dm text-[11px] sm:text-xs" style={{ color:'#8B5CF6' }}>Já participou de grupo</p>}
+                        {a.observacoes && <p className="font-dm text-[11px] sm:text-xs mt-1 italic" style={{ color:X3 }}>&ldquo;{a.observacoes}&rdquo;</p>}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-1.5 shrink-0">
-                      {Object.entries(ST).filter(([k]) => k !== a.status).map(([k,v]) => <button key={k} onClick={() => updStatus(a.id, k)} className="font-dm text-xs px-2.5 py-1.5 rounded-xl font-medium" style={{ backgroundColor:v.bg, color:v.tx }}>{v.lb}</button>)}
-                      <button onClick={() => delAval(a.id)} className="font-dm text-xs px-2.5 py-1.5 rounded-xl font-medium" style={{ backgroundColor:'rgba(200,75,49,0.06)', color:'#C84B31' }}>Excluir</button>
+
+                    {/* Action buttons: WhatsApp messages */}
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                      {/* Confirmar */}
+                      <button onClick={() => waLink(a.telefone, a.nome_completo, 'confirmacao', bk?.slots?.data, bk?.slots?.hora)} className="font-dm text-[11px] sm:text-xs px-2.5 sm:px-3 py-1.5 rounded-xl font-medium transition-all hover:-translate-y-0.5 cursor-pointer inline-flex items-center gap-1.5" style={{ backgroundColor:'rgba(37,211,102,0.12)', color:'#25D366' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        Confirmar
+                      </button>
+                      {/* Cobrar */}
+                      <button onClick={() => waLink(a.telefone, a.nome_completo, 'cobranca', bk?.slots?.data, bk?.slots?.hora)} className="font-dm text-[11px] sm:text-xs px-2.5 sm:px-3 py-1.5 rounded-xl font-medium transition-all hover:-translate-y-0.5 cursor-pointer inline-flex items-center gap-1.5" style={{ backgroundColor:'rgba(212,133,74,0.12)', color:'#D4854A' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Cobrar
+                      </button>
+                      {/* Remover */}
+                      <button onClick={() => waLink(a.telefone, a.nome_completo, 'remocao', bk?.slots?.data, bk?.slots?.hora)} className="font-dm text-[11px] sm:text-xs px-2.5 sm:px-3 py-1.5 rounded-xl font-medium transition-all hover:-translate-y-0.5 cursor-pointer inline-flex items-center gap-1.5" style={{ backgroundColor:'rgba(200,75,49,0.12)', color:'#C84B31' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        Remover
+                      </button>
+                      {/* Reaproveitar */}
+                      <button onClick={() => waLink(a.telefone, a.nome_completo, 'reaproveitar')} className="font-dm text-[11px] sm:text-xs px-2.5 sm:px-3 py-1.5 rounded-xl font-medium transition-all hover:-translate-y-0.5 cursor-pointer inline-flex items-center gap-1.5" style={{ backgroundColor:'rgba(139,92,246,0.12)', color:'#8B5CF6' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                        Reaproveitar
+                      </button>
+                      {/* WhatsApp direto */}
+                      <a href={`https://wa.me/${a.telefone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="font-dm text-[11px] sm:text-xs px-2.5 sm:px-3 py-1.5 rounded-xl font-medium transition-all hover:-translate-y-0.5 inline-flex items-center gap-1.5 cursor-pointer" style={{ backgroundColor:'rgba(37,211,102,0.08)', color:'#25D366' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                        WhatsApp
+                      </a>
+                    </div>
+
+                    {/* Status change + actions */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-2" style={{ borderTop:`1px solid ${isDone ? 'rgba(255,255,255,0.03)' : B}` }}>
+                      {Object.entries(ST).filter(([k]) => k !== a.status).map(([k,v]) => <button key={k} onClick={() => updStatus(a.id, k)} className="font-dm text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg font-medium" style={{ backgroundColor:v.bg, color:v.tx }}>{v.lb}</button>)}
+                      {!bk && !isDone && <button onClick={() => setAssigning(a)} className="font-dm text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg font-medium text-white inline-flex items-center gap-1" style={{ backgroundColor:T }}><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>Alocar</button>}
+                      {bk && <button onClick={() => rmBooking(bk.id)} className="font-dm text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg font-medium" style={{ color:'#C84B31', backgroundColor:'rgba(200,75,49,0.06)' }}>Desalocar</button>}
+                      <button onClick={() => delAval(a.id)} className="font-dm text-[10px] sm:text-xs px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg font-medium" style={{ backgroundColor:'rgba(200,75,49,0.06)', color:'#C84B31' }}>Excluir</button>
                     </div>
                   </div>
                 </motion.div>
@@ -535,7 +579,7 @@ export default function AdminPanel() {
         /* ===== MENSAGENS ===== */
         <div className="space-y-6">
           <p className="font-dm text-sm" style={{ color:X2 }}>Variáveis: <code className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor:'rgba(253,251,247,0.06)', color:T }}>{'{nome}'}</code> <code className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor:'rgba(253,251,247,0.06)', color:T }}>{'{data}'}</code> <code className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor:'rgba(253,251,247,0.06)', color:T }}>{'{hora}'}</code> <code className="px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor:'rgba(253,251,247,0.06)', color:T }}>{'{link}'}</code></p>
-          {msgs.map(m => { const ed = editMsg?.tipo === m.tipo; const col: Record<string,string> = { confirmacao:T, cobranca:'#D4854A', remocao:'#C84B31' }; const ic: Record<string,string> = { confirmacao:'✓', cobranca:'⏰', remocao:'✕' }; return (
+          {msgs.map(m => { const ed = editMsg?.tipo === m.tipo; const col: Record<string,string> = { confirmacao:T, cobranca:'#D4854A', remocao:'#C84B31', reaproveitar:'#8B5CF6' }; const ic: Record<string,string> = { confirmacao:'✓', cobranca:'⏰', remocao:'✕', reaproveitar:'↻' }; return (
             <div key={m.tipo} className="rounded-2xl p-6" style={{ backgroundColor:C, border:`1.5px solid ${B}` }}>
               <div className="flex items-center gap-3 mb-4"><div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold" style={{ backgroundColor:`${col[m.tipo]||'#5C5C5C'}20`, color:col[m.tipo]||'#5C5C5C' }}>{ic[m.tipo]||'?'}</div><div><h3 className="font-dm text-sm font-bold" style={{ color:X }}>{m.titulo}</h3><p className="font-dm text-xs" style={{ color:X3 }}>{m.tipo}</p></div></div>
               {ed ? (<div><textarea value={editTpl} onChange={e => setEditTpl(e.target.value)} rows={4} className="font-dm text-sm w-full px-4 py-3 rounded-xl outline-none resize-none mb-3" style={{ backgroundColor:'rgba(253,251,247,0.04)', border:`1.5px solid ${T}`, color:X }} /><div className="flex gap-2"><button onClick={saveMsg} className="font-dm text-sm px-5 py-2 rounded-xl text-white font-medium" style={{ backgroundColor:T }}>Salvar</button><button onClick={() => setEditMsg(null)} className="font-dm text-sm px-5 py-2 rounded-xl" style={{ color:X3 }}>Cancelar</button></div></div>

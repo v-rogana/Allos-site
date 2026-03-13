@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronRight, ChevronLeft, Send, Download, AlertCircle, CheckCircle2, Sparkles } from 'lucide-react'
+import { ChevronRight, ChevronLeft, Send, Download, AlertCircle, CheckCircle2, Sparkles, Clock, Award } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import StarRating from './StarRating'
 import CertificateGenerator from './CertificateGenerator'
@@ -10,6 +10,7 @@ import CertificateGenerator from './CertificateGenerator'
 interface Atividade {
   id: string
   nome: string
+  carga_horaria: number
 }
 
 interface Condutor {
@@ -25,7 +26,16 @@ interface Evento {
   data_fim: string
 }
 
+interface HorasInfo {
+  totalHoras: number
+  horasRestantes: number
+  liberado: boolean
+  porAtividade: Record<string, { count: number; horas: number }>
+}
+
 type Step = 'identificacao' | 'atividade' | 'feedback' | 'sucesso'
+
+const HORAS_MINIMO = 30
 
 export default function FormCertificado() {
   // Data from Supabase
@@ -45,10 +55,16 @@ export default function FormCertificado() {
   const [notaCondutor, setNotaCondutor] = useState(0)
   const [relato, setRelato] = useState('')
 
+  // Hours tracking
+  const [horasInfo, setHorasInfo] = useState<HorasInfo | null>(null)
+  const [loadingHoras, setLoadingHoras] = useState(false)
+
   // UI state
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [claimed, setClaimed] = useState(false)
+  const [claiming, setClaiming] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -63,6 +79,42 @@ export default function FormCertificado() {
     if (atRes.data) setAtividades(atRes.data)
     if (coRes.data) setCondutores(coRes.data)
     if (Array.isArray(evRes)) setEventos(evRes)
+  }
+
+  async function fetchHoras(nome: string) {
+    if (!nome.trim()) return
+    setLoadingHoras(true)
+    try {
+      const res = await fetch('/api/certificados/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_hours', nome: nome.trim() }),
+      })
+      const data = await res.json()
+      if (!data.error) setHorasInfo(data)
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingHoras(false)
+    }
+  }
+
+  async function claimCertificates() {
+    setClaiming(true)
+    try {
+      await fetch('/api/certificados/admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'claim_certificates', nome: nomeCompleto.trim() }),
+      })
+      setClaimed(true)
+      // Refresh hours (should now be 0)
+      await fetchHoras(nomeCompleto)
+    } catch {
+      // silently fail
+    } finally {
+      setClaiming(false)
+    }
   }
 
   function toggleCondutor(nome: string) {
@@ -80,7 +132,7 @@ export default function FormCertificado() {
       case 'atividade':
         return atividadeSelecionada.length > 0
       case 'feedback':
-        if (isEvento) return true // Feedback is optional for events
+        if (isEvento) return true
         return notaGrupo > 0 && condutoresSelecionados.length > 0 && notaCondutor > 0
       default:
         return false
@@ -93,20 +145,20 @@ export default function FormCertificado() {
     setError('')
 
     try {
-      // Rate limiting: check submissions today
-      const today = new Date().toISOString().split('T')[0]
-      const { count } = await supabase
-        .from('certificado_submissions')
-        .select('*', { count: 'exact', head: true })
-        .eq('email', email.trim().toLowerCase())
-        .gte('created_at', `${today}T00:00:00`)
-        .lte('created_at', `${today}T23:59:59`)
-
-      if (count !== null && count >= 3) {
-        setError('Você já gerou o número máximo de certificados hoje (3). Tente novamente amanhã.')
-        setLoading(false)
-        return
-      }
+      // Rate limiting: TEMPORARIAMENTE DESATIVADO PARA TESTES
+      // const today = new Date().toISOString().split('T')[0]
+      // const { count } = await supabase
+      //   .from('certificado_submissions')
+      //   .select('*', { count: 'exact', head: true })
+      //   .eq('email', email.trim().toLowerCase())
+      //   .gte('created_at', `${today}T00:00:00`)
+      //   .lte('created_at', `${today}T23:59:59`)
+      //
+      // if (count !== null && count >= 3) {
+      //   setError('Você já registrou o número máximo de atividades hoje (3). Tente novamente amanhã.')
+      //   setLoading(false)
+      //   return
+      // }
 
       // Submit
       const { error: submitError } = await supabase
@@ -120,10 +172,13 @@ export default function FormCertificado() {
           condutores: isEvento ? [] : condutoresSelecionados,
           nota_condutor: isEvento ? (notaCondutor || 5) : notaCondutor,
           relato: relato.trim() || null,
-          certificado_gerado: true,
+          certificado_gerado: false,
         })
 
       if (submitError) throw submitError
+
+      // Fetch updated hours after submission
+      await fetchHoras(nomeCompleto)
 
       setSubmitted(true)
       setStep('sucesso')
@@ -162,6 +217,9 @@ export default function FormCertificado() {
       setStep(steps[stepIndex - 1])
     }
   }
+
+  // Get the selected activity's hours
+  const atividadeHoras = atividades.find(a => a.nome === atividadeSelecionada)?.carga_horaria || 2
 
   return (
     <div className="min-h-screen relative overflow-hidden" style={{ background: 'linear-gradient(165deg, #1A1A1A 0%, #141414 50%, #1A1A1A 100%)' }}>
@@ -227,11 +285,24 @@ export default function FormCertificado() {
                 >
                   <div>
                     <h2 className="font-fraunces font-bold text-xl mb-1" style={{ color: 'rgba(253,251,247,0.9)' }}>Seus Dados</h2>
-                    <p className="font-dm text-sm" style={{ color: 'rgba(253,251,247,0.35)' }}>Informe seus dados para gerar o certificado</p>
+                    <p className="font-dm text-sm" style={{ color: 'rgba(253,251,247,0.35)' }}>Informe seus dados para registrar sua participação</p>
+                  </div>
+
+                  {/* Warning about correct data */}
+                  <div className="flex items-start gap-3 p-4 rounded-xl" style={{ backgroundColor: 'rgba(212,133,74,0.08)', border: '1px solid rgba(212,133,74,0.2)' }}>
+                    <AlertCircle size={18} className="flex-shrink-0 mt-0.5" style={{ color: '#D4854A' }} />
+                    <div>
+                      <p className="font-dm text-sm font-medium mb-1" style={{ color: '#D4854A' }}>
+                        Preencha seus dados corretamente
+                      </p>
+                      <p className="font-dm text-xs leading-relaxed" style={{ color: 'rgba(212,133,74,0.8)' }}>
+                        O nome completo e o e-mail devem ser preenchidos corretamente. Se houver erro no preenchimento, o certificado não será gerado. O nome completo é o principal identificador para o acúmulo de horas.
+                      </p>
+                    </div>
                   </div>
 
                   <div className="space-y-4">
-                    <FormField label="Nome completo *" value={nomeCompleto} onChange={setNomeCompleto} placeholder="Seu nome completo" />
+                    <FormField label="Nome completo *" value={nomeCompleto} onChange={setNomeCompleto} placeholder="Seu nome completo (exatamente como deseja no certificado)" />
                     <FormField label="Nome social (opcional)" value={nomeSocial} onChange={setNomeSocial} placeholder="Como prefere ser chamado(a)" />
                     <FormField label="E-mail *" value={email} onChange={setEmail} placeholder="seu@email.com" type="email" />
                   </div>
@@ -320,14 +391,19 @@ export default function FormCertificado() {
                             color: sel ? '#C84B31' : 'rgba(253,251,247,0.7)',
                           }}
                         >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
-                              style={{ borderColor: sel ? '#C84B31' : 'rgba(255,255,255,0.15)' }}
-                            >
-                              {sel && <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#C84B31' }} />}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0"
+                                style={{ borderColor: sel ? '#C84B31' : 'rgba(255,255,255,0.15)' }}
+                              >
+                                {sel && <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#C84B31' }} />}
+                              </div>
+                              {at.nome}
                             </div>
-                            {at.nome}
+                            <span className="font-dm text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.04)', color: 'rgba(253,251,247,0.4)' }}>
+                              {at.carga_horaria || 2}h
+                            </span>
                           </div>
                         </button>
                       )
@@ -493,27 +569,153 @@ export default function FormCertificado() {
                     >
                       <CheckCircle2 size={32} style={{ color: '#C84B31' }} />
                     </motion.div>
-                    <h2 className="font-fraunces font-bold text-2xl mb-3" style={{ color: 'rgba(253,251,247,0.95)' }}>
-                      Obrigado por participar!
+                    <h2 className="font-fraunces font-bold text-2xl mb-2" style={{ color: 'rgba(253,251,247,0.95)' }}>
+                      Participação registrada!
                     </h2>
+                    <p className="font-dm text-sm" style={{ color: 'rgba(253,251,247,0.4)' }}>
+                      +{atividadeHoras}h de <strong style={{ color: 'rgba(253,251,247,0.6)' }}>{atividadeSelecionada}</strong> adicionadas ao seu acumulado.
+                    </p>
                   </div>
 
-                  {/* Certificate */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Download size={16} style={{ color: '#C84B31' }} />
-                      <span className="font-dm text-sm font-medium" style={{ color: 'rgba(253,251,247,0.7)' }}>Seu Certificado</span>
+                  {/* Event: immediate certificate */}
+                  {isEvento && (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Download size={16} style={{ color: '#C84B31' }} />
+                        <span className="font-dm text-sm font-medium" style={{ color: 'rgba(253,251,247,0.7)' }}>Certificado do Evento</span>
+                      </div>
+                      <CertificateGenerator
+                        data={{
+                          nomeParticipante: nomeCompleto,
+                          atividade: atividadeSelecionada,
+                          data: new Date().toISOString().split('T')[0],
+                          cargaHoraria: atividadeHoras,
+                          cargaHorariaExtenso: horasExtenso(atividadeHoras),
+                        }}
+                      />
                     </div>
-                    <CertificateGenerator
-                      data={{
-                        nomeParticipante: nomeCompleto,
-                        atividade: atividadeSelecionada === 'Avaliallos (Processo avaliativo)'
-                          ? 'Monitoria formativa de psicoterapia'
-                          : atividadeSelecionada,
-                        data: new Date().toISOString().split('T')[0],
-                      }}
-                    />
-                  </div>
+                  )}
+
+                  {/* Hours progress */}
+                  {horasInfo && !claimed && (
+                    <div className="rounded-xl p-5 space-y-4" style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Clock size={16} style={{ color: '#C84B31' }} />
+                        <span className="font-dm text-sm font-medium" style={{ color: 'rgba(253,251,247,0.7)' }}>Seu Acumulado Total</span>
+                      </div>
+
+                      {/* Progress bar */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.4)' }}>
+                            {horasInfo.totalHoras}h de {HORAS_MINIMO}h necessárias
+                          </span>
+                          <span className="font-dm text-xs font-bold" style={{ color: horasInfo.liberado ? '#0EA5A0' : '#D4854A' }}>
+                            {horasInfo.liberado ? 'Certificados liberados!' : `Faltam ${horasInfo.horasRestantes}h`}
+                          </span>
+                        </div>
+                        <div className="w-full h-3 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}>
+                          <motion.div
+                            className="h-full rounded-full"
+                            style={{ backgroundColor: horasInfo.liberado ? '#0EA5A0' : '#C84B31' }}
+                            initial={{ width: 0 }}
+                            animate={{ width: `${Math.min((horasInfo.totalHoras / HORAS_MINIMO) * 100, 100)}%` }}
+                            transition={{ duration: 1, delay: 0.3 }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Hours by activity */}
+                      {Object.keys(horasInfo.porAtividade).length > 0 && (
+                        <div className="space-y-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                          <span className="font-dm text-xs font-medium" style={{ color: 'rgba(253,251,247,0.5)' }}>Suas participações acumuladas:</span>
+                          {Object.entries(horasInfo.porAtividade).map(([nome, info]) => (
+                            <div key={nome} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ backgroundColor: nome === atividadeSelecionada ? 'rgba(200,75,49,0.06)' : 'rgba(255,255,255,0.02)' }}>
+                              <div className="flex items-center gap-2">
+                                {nome === atividadeSelecionada && <span className="font-dm text-[10px] px-1.5 py-0.5 rounded" style={{ backgroundColor: 'rgba(200,75,49,0.15)', color: '#C84B31' }}>agora</span>}
+                                <span className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.6)' }}>{nome}</span>
+                              </div>
+                              <span className="font-dm text-xs font-bold" style={{ color: 'rgba(253,251,247,0.7)' }}>
+                                {info.horas}h ({info.count} {info.count === 1 ? 'participação' : 'participações'})
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {!horasInfo.liberado && (
+                        <p className="font-dm text-xs leading-relaxed" style={{ color: 'rgba(253,251,247,0.35)' }}>
+                          Continue participando das atividades para acumular as {HORAS_MINIMO} horas necessárias.
+                          Quando atingir o total, seus certificados ficarão disponíveis para download.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {loadingHoras && (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: 'rgba(255,255,255,0.1)', borderTopColor: 'transparent' }} />
+                    </div>
+                  )}
+
+                  {/* Certificates - only when hours >= 30 and not yet claimed */}
+                  {horasInfo?.liberado && !claimed && (
+                    <div className="space-y-6">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Award size={16} style={{ color: '#C84B31' }} />
+                        <span className="font-dm text-sm font-medium" style={{ color: 'rgba(253,251,247,0.7)' }}>Seus Certificados</span>
+                      </div>
+                      <p className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.35)' }}>
+                        Cada certificado corresponde a um tipo de atividade, com as horas acumuladas.
+                        Ao clicar em &quot;Resgatar certificados&quot;, o contador será reiniciado.
+                      </p>
+                      {Object.entries(horasInfo.porAtividade).map(([nomeAtividade, info]) => (
+                        <div key={nomeAtividade} className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="font-dm text-sm font-medium" style={{ color: 'rgba(253,251,247,0.7)' }}>{nomeAtividade}</span>
+                            <span className="font-dm text-xs px-2.5 py-1 rounded-full" style={{ backgroundColor: 'rgba(14,165,160,0.1)', color: '#0EA5A0' }}>
+                              {info.horas}h acumuladas
+                            </span>
+                          </div>
+                          <CertificateGenerator
+                            data={{
+                              nomeParticipante: nomeCompleto,
+                              atividade: nomeAtividade === 'Avaliallos (Processo avaliativo)'
+                                ? 'Monitoria formativa de psicoterapia'
+                                : nomeAtividade,
+                              data: new Date().toISOString().split('T')[0],
+                              cargaHoraria: info.horas,
+                              cargaHorariaExtenso: horasExtenso(info.horas),
+                            }}
+                          />
+                        </div>
+                      ))}
+
+                      {/* Claim button: downloads done, reset cycle */}
+                      <button
+                        onClick={claimCertificates}
+                        disabled={claiming}
+                        className="w-full font-dm font-bold text-sm py-4 rounded-xl transition-all duration-300 hover:-translate-y-0.5 inline-flex items-center justify-center gap-2"
+                        style={{ backgroundColor: '#0EA5A0', color: '#FFFFFF', boxShadow: '0 4px 20px rgba(14,165,160,0.3)' }}
+                      >
+                        <CheckCircle2 size={16} />
+                        {claiming ? 'Resgatando...' : 'Resgatar certificados e reiniciar contador'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* After claiming: confirmation */}
+                  {claimed && (
+                    <div className="rounded-xl p-5 text-center space-y-3" style={{ backgroundColor: 'rgba(14,165,160,0.06)', border: '1px solid rgba(14,165,160,0.15)' }}>
+                      <CheckCircle2 size={24} className="mx-auto" style={{ color: '#0EA5A0' }} />
+                      <p className="font-dm text-sm font-medium" style={{ color: '#0EA5A0' }}>
+                        Certificados resgatados com sucesso!
+                      </p>
+                      <p className="font-dm text-xs" style={{ color: 'rgba(253,251,247,0.4)' }}>
+                        Seu contador foi reiniciado. Continue participando para acumular {HORAS_MINIMO}h novamente.
+                      </p>
+                    </div>
+                  )}
 
                   {/* CTA buttons */}
                   <div className="space-y-3">
@@ -608,6 +810,22 @@ export default function FormCertificado() {
       </div>
     </div>
   )
+}
+
+function horasExtenso(h: number): string {
+  const extenso: Record<number, string> = {
+    1: 'uma', 2: 'duas', 3: 'três', 4: 'quatro', 5: 'cinco',
+    6: 'seis', 7: 'sete', 8: 'oito', 9: 'nove', 10: 'dez',
+    11: 'onze', 12: 'doze', 13: 'treze', 14: 'quatorze', 15: 'quinze',
+    16: 'dezesseis', 17: 'dezessete', 18: 'dezoito', 19: 'dezenove', 20: 'vinte',
+    21: 'vinte e uma', 22: 'vinte e duas', 23: 'vinte e três', 24: 'vinte e quatro',
+    25: 'vinte e cinco', 26: 'vinte e seis', 27: 'vinte e sete', 28: 'vinte e oito',
+    29: 'vinte e nove', 30: 'trinta', 31: 'trinta e uma', 32: 'trinta e duas',
+    33: 'trinta e três', 34: 'trinta e quatro', 35: 'trinta e cinco',
+    36: 'trinta e seis', 37: 'trinta e sete', 38: 'trinta e oito',
+    39: 'trinta e nove', 40: 'quarenta', 50: 'cinquenta', 60: 'sessenta',
+  }
+  return extenso[h] || String(h)
 }
 
 function FormField({ label, value, onChange, placeholder, type = 'text' }: {

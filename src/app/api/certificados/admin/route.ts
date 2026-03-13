@@ -33,10 +33,20 @@ export async function POST(req: NextRequest) {
 
   // ─── Atividades ─────────────────────────────────────────────
   if (action === 'create_atividade') {
-    const { nome } = body
-    const { data, error } = await sb().from('certificado_atividades').insert({ nome }).select().single()
+    const { nome, carga_horaria } = body
+    const { data, error } = await sb().from('certificado_atividades').insert({ nome, carga_horaria: carga_horaria || 2 }).select().single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json(data)
+  }
+
+  if (action === 'update_atividade') {
+    const { id, nome, carga_horaria } = body
+    const updates: Record<string, unknown> = {}
+    if (nome !== undefined) updates.nome = nome
+    if (carga_horaria !== undefined) updates.carga_horaria = carga_horaria
+    const { error } = await sb().from('certificado_atividades').update(updates).eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
   }
 
   if (action === 'toggle_atividade') {
@@ -146,6 +156,65 @@ export async function POST(req: NextRequest) {
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     }
     return NextResponse.json({ success: true, added: missing.length, names: missing })
+  }
+
+  // ─── Get accumulated hours by person name (current cycle only) ─────
+  if (action === 'get_hours') {
+    const { nome } = body
+    if (!nome) return NextResponse.json({ error: 'nome required' }, { status: 400 })
+
+    // Only count submissions NOT yet claimed (current cycle)
+    const { data: subs, error: subsErr } = await sb()
+      .from('certificado_submissions')
+      .select('atividade_nome')
+      .ilike('nome_completo', nome.trim())
+      .or('certificado_resgatado.is.null,certificado_resgatado.eq.false')
+
+    if (subsErr) return NextResponse.json({ error: subsErr.message }, { status: 500 })
+
+    // Get all atividades with their carga_horaria
+    const { data: atividades } = await sb()
+      .from('certificado_atividades')
+      .select('nome, carga_horaria')
+
+    const horasMap: Record<string, number> = {}
+    ;(atividades || []).forEach((a: { nome: string; carga_horaria: number | null }) => {
+      horasMap[a.nome.toLowerCase()] = a.carga_horaria || 2
+    })
+
+    // Calculate hours per activity type
+    const porAtividade: Record<string, { count: number; horas: number }> = {}
+    let totalHoras = 0
+    ;(subs || []).forEach((s: { atividade_nome: string }) => {
+      const nome_at = s.atividade_nome
+      const ch = horasMap[nome_at.toLowerCase()] || 2
+      if (!porAtividade[nome_at]) porAtividade[nome_at] = { count: 0, horas: 0 }
+      porAtividade[nome_at].count++
+      porAtividade[nome_at].horas += ch
+      totalHoras += ch
+    })
+
+    return NextResponse.json({
+      totalHoras,
+      horasRestantes: Math.max(0, 30 - totalHoras),
+      liberado: totalHoras >= 30,
+      porAtividade,
+    })
+  }
+
+  // ─── Claim certificates: mark all current-cycle submissions as claimed (reset) ─
+  if (action === 'claim_certificates') {
+    const { nome } = body
+    if (!nome) return NextResponse.json({ error: 'nome required' }, { status: 400 })
+
+    const { error: claimErr } = await sb()
+      .from('certificado_submissions')
+      .update({ certificado_resgatado: true })
+      .ilike('nome_completo', nome.trim())
+      .or('certificado_resgatado.is.null,certificado_resgatado.eq.false')
+
+    if (claimErr) return NextResponse.json({ error: claimErr.message }, { status: 500 })
+    return NextResponse.json({ success: true })
   }
 
   return NextResponse.json({ error: 'unknown action' }, { status: 400 })
