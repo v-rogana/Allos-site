@@ -37,6 +37,12 @@ type Step = 'identificacao' | 'atividade' | 'feedback' | 'sucesso'
 
 const HORAS_MINIMO = 30
 
+const SLIDE_VARIANTS = {
+  enter: (direction: number) => ({ x: direction > 0 ? 60 : -60, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit: (direction: number) => ({ x: direction > 0 ? -60 : 60, opacity: 0 }),
+}
+
 export default function FormCertificado() {
   // Data from Supabase
   const [atividades, setAtividades] = useState<Atividade[]>([])
@@ -182,8 +188,7 @@ export default function FormCertificado() {
 
       setSubmitted(true)
       setStep('sucesso')
-    } catch (err) {
-      console.error(err)
+    } catch {
       setError('Erro ao enviar o formulário. Tente novamente.')
     } finally {
       setLoading(false)
@@ -192,12 +197,6 @@ export default function FormCertificado() {
 
   const steps: Step[] = ['identificacao', 'atividade', 'feedback', 'sucesso']
   const stepIndex = steps.indexOf(step)
-
-  const slideVariants = {
-    enter: (direction: number) => ({ x: direction > 0 ? 60 : -60, opacity: 0 }),
-    center: { x: 0, opacity: 1 },
-    exit: (direction: number) => ({ x: direction > 0 ? -60 : 60, opacity: 0 }),
-  }
 
   const [direction, setDirection] = useState(1)
 
@@ -276,7 +275,7 @@ export default function FormCertificado() {
                 <motion.div
                   key="identificacao"
                   custom={direction}
-                  variants={slideVariants}
+                  variants={SLIDE_VARIANTS}
                   initial="enter"
                   animate="center"
                   exit="exit"
@@ -314,7 +313,7 @@ export default function FormCertificado() {
                 <motion.div
                   key="atividade"
                   custom={direction}
-                  variants={slideVariants}
+                  variants={SLIDE_VARIANTS}
                   initial="enter"
                   animate="center"
                   exit="exit"
@@ -417,7 +416,7 @@ export default function FormCertificado() {
                 <motion.div
                   key="feedback"
                   custom={direction}
-                  variants={slideVariants}
+                  variants={SLIDE_VARIANTS}
                   initial="enter"
                   animate="center"
                   exit="exit"
@@ -552,7 +551,7 @@ export default function FormCertificado() {
                 <motion.div
                   key="sucesso"
                   custom={direction}
-                  variants={slideVariants}
+                  variants={SLIDE_VARIANTS}
                   initial="enter"
                   animate="center"
                   exit="exit"

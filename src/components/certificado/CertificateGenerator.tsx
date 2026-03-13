@@ -41,7 +41,9 @@ export default function CertificateGenerator({ data, onReady }: CertificateGener
   const [signatureImg, setSignatureImg] = useState<HTMLImageElement | null>(null)
 
   useEffect(() => {
-    loadImage('/assinatura.jpg').then(setSignatureImg).catch(() => {})
+    loadImage('/assinatura.jpg').then(setSignatureImg).catch(() => {
+      // Assinatura não disponível — certificado será gerado sem ela
+    })
   }, [])
 
   const drawCertificate = useCallback((ctx: CanvasRenderingContext2D, w: number, h: number) => {

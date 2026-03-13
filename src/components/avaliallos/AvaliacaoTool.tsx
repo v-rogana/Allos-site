@@ -152,7 +152,7 @@ export default function AvaliacaoTool({ avaliadorNome, onDataChange }: Props) {
       const d = await r.json()
       if (!r.ok) { flash(d.error || 'Erro ao criar'); return }
       flash('Avaliação criada!'); setView('list'); setForm(emptyForm); fetchAll(); onDataChange?.()
-    } catch (e) { console.error(e); flash('Erro ao criar') }
+    } catch { flash('Erro ao criar') }
   }
 
   const salvar = async () => {
@@ -185,7 +185,7 @@ export default function AvaliacaoTool({ avaliadorNome, onDataChange }: Props) {
       const d = await r.json()
       if (!r.ok) { flash(d.error || 'Erro ao salvar'); return }
       flash('Avaliação atualizada!'); setView('list'); fetchAll(); onDataChange?.()
-    } catch (e) { console.error(e); flash('Erro ao salvar') }
+    } catch { flash('Erro ao salvar') }
   }
 
   const excluir = async (id: number) => {
