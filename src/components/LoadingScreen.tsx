@@ -19,7 +19,7 @@ export default function LoadingScreen({ isLoading }: { isLoading: boolean }) {
             </div>
           </motion.div>
           <div className="absolute bottom-10 w-28 h-[1px] bg-[#E5DFD3] overflow-hidden">
-            <motion.div className="h-full bg-[#2E9E8F]" initial={{ width:"0%" }} animate={{ width:"100%" }} transition={{ duration:1.4,ease:"easeInOut" }}/>
+            <motion.div className="h-full bg-[#2E9E8F]" initial={{ width:"0%" }} animate={{ width:"100%" }} transition={{ duration:1.6,ease:"easeInOut" }}/>
           </div>
         </motion.div>
       )}

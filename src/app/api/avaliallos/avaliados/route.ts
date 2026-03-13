@@ -23,7 +23,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const sb = getSupabaseAdmin()
   const body = await req.json()
-  let tel = body.telefone.replace(/\D/g, '')
+  if (!body.nome_completo || !body.telefone) {
+    return NextResponse.json({ error: 'nome_completo e telefone são obrigatórios' }, { status: 400 })
+  }
+  let tel = (body.telefone || '').replace(/\D/g, '')
   if (!tel.startsWith('+')) tel = tel.startsWith('55') ? '+' + tel : '+55' + tel
   const insert: Record<string, unknown> = {
     nome_completo: body.nome_completo, telefone: tel,
@@ -37,7 +40,8 @@ export async function POST(req: NextRequest) {
 
   // Se escolheu avulso, criar booking
   if (body.avulso_slot_id) {
-    await sb.from('bookings').insert({ avaliado_id: data.id, slot_id: body.avulso_slot_id })
+    const { error: bookingErr } = await sb.from('bookings').insert({ avaliado_id: data.id, slot_id: body.avulso_slot_id })
+    if (bookingErr) return NextResponse.json({ error: bookingErr.message }, { status: 500 })
   }
 
   return NextResponse.json(data)

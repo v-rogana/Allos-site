@@ -37,12 +37,16 @@ const LINKS = [
   { n: 'Insight e potência', u: 'https://youtu.be/u1uOyDlyjUU' },
 ]
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+}
+
 function buildHTML(a: ReportData, light = false): string {
   const sc = CR.map(c => ({ ...c, val: (a[c.key] as number) || 0 }))
   const total = sc.reduce((s, c) => s + c.val, 0)
   const media = (total / sc.length).toFixed(1)
   const dt = new Date(a.data + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  const nm = a.avaliado_nome || a.nome_sessao
+  const nm = escapeHtml(a.avaliado_nome || a.nome_sessao)
   const o = typeof window !== 'undefined' ? window.location.origin : ''
   const sCol = (v: number) => v >= 3 ? '#0EA5A0' : v >= 1 ? '#1BBAB0' : v >= -1 ? '#D4854A' : '#C84B31'
 
@@ -198,7 +202,7 @@ ${a.observacoes ? `
 <!-- OBS -->
 <div style="padding:28px 32px;border-radius:18px;background:linear-gradient(135deg,rgba(139,92,246,0.02),rgba(139,92,246,0.005));border:1px solid rgba(139,92,246,0.08);border-left:3px solid rgba(139,92,246,0.4);margin-bottom:48px">
   <div style="font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#8B5CF6;margin-bottom:12px;opacity:0.8">Observações do Avaliador</div>
-  <p style="font-size:14px;color:rgba(253,251,247,0.6);line-height:1.85">${a.observacoes}</p>
+  <p style="font-size:14px;color:rgba(253,251,247,0.6);line-height:1.85">${escapeHtml(a.observacoes || '')}</p>
 </div>` : ''}
 
 <!-- COMP GRID -->
@@ -273,7 +277,7 @@ ${a.observacoes ? `
 
 export function generateReport(a: ReportData) {
   const html = buildHTML(a)
-  const nm = a.avaliado_nome || a.nome_sessao
+  const nm = escapeHtml(a.avaliado_nome || a.nome_sessao)
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')

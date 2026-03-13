@@ -56,7 +56,7 @@ export default function Footer() {
         </div>
         <div className="pt-6 flex flex-col sm:flex-row justify-between items-center gap-3"
           style={{borderTop:"1px solid rgba(253,251,247,.08)"}}>
-          <p className="font-dm text-[rgba(253,251,247,.3)] text-xs">© 2025 Associação Allos. Todos os direitos reservados.</p>
+          <p className="font-dm text-[rgba(253,251,247,.3)] text-xs">© {new Date().getFullYear()} Associação Allos. Todos os direitos reservados.</p>
           <p className="font-dm text-[rgba(253,251,247,.3)] text-xs">Desenvolvido com <span className="text-[#2E9E8F]">♥</span> em Belo Horizonte</p>
         </div>
       </div>
